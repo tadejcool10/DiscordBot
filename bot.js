@@ -80,22 +80,29 @@ client.on("interactionCreate", async interaction => {
 
 const { EmbedBuilder } = require('discord.js');
 
-client.on("interactionCreate", async interaction => {
+client.on("messageCreate", async message => {
+    // Ignore messages from bots
+    if (message.author.bot) return;
 
-    if (!interaction.isChatInputCommand()) return;
+    // Convert message content to lowercase for easier checking
+    const msg = message.content.toLowerCase();
 
-    const user = getUser(interaction.user.id);
+    // Check if it starts with "goodmc " and a command
+    if (!msg.startsWith("goodmc ")) return;
 
-    if (interaction.commandName === "balance") {
+    const args = msg.slice(7).trim(); // remove "goodmc " part
+    const user = getUser(message.author.id);
+
+    if (args === "balance") {
         const embed = new EmbedBuilder()
             .setTitle("💰 Balance")
             .setDescription(`You have **${user.money} coins**`)
             .setColor("Green");
 
-        interaction.reply({ embeds: [embed] });
+        message.channel.send({ embeds: [embed] });
     }
 
-    if (interaction.commandName === "daily") {
+    if (args === "daily") {
         const now = Date.now();
         const cooldown = 86400000; // 24 hours
 
@@ -104,7 +111,7 @@ client.on("interactionCreate", async interaction => {
                 .setTitle("⏳ Daily Reward")
                 .setDescription("You already claimed your daily reward!")
                 .setColor("Red");
-            return interaction.reply({ embeds: [embed] });
+            return message.channel.send({ embeds: [embed] });
         }
 
         const reward = 500;
@@ -117,10 +124,10 @@ client.on("interactionCreate", async interaction => {
             .setDescription(`You received **${reward} coins**!`)
             .setColor("Gold");
 
-        interaction.reply({ embeds: [embed] });
+        message.channel.send({ embeds: [embed] });
     }
 
-    if (interaction.commandName === "work") {
+    if (args === "work") {
         const now = Date.now();
         const cooldown = 60 * 60 * 1000; // 1 hour
 
@@ -134,7 +141,7 @@ client.on("interactionCreate", async interaction => {
                 .setDescription(`You need to wait **${minutes}m ${seconds}s** before working again.`)
                 .setColor("Red");
 
-            return interaction.reply({ embeds: [embed] });
+            return message.channel.send({ embeds: [embed] });
         }
 
         const amount = 50;
@@ -147,72 +154,8 @@ client.on("interactionCreate", async interaction => {
             .setDescription(`You earned **${amount} coins**!`)
             .setColor("Green");
 
-        interaction.reply({ embeds: [embed] });
+        message.channel.send({ embeds: [embed] });
     }
-
-    if (interaction.commandName === "leaderboard") {
-        const sorted = Object.entries(data)
-            .sort((a, b) => b[1].money - a[1].money)
-            .slice(0, 10);
-
-        let text = "";
-        sorted.forEach((u, i) => {
-            text += `${i + 1}. <@${u[0]}> — ${u[1].money} coins\n`;
-        });
-
-        const embed = new EmbedBuilder()
-            .setTitle("🏆 Leaderboard")
-            .setDescription(text || "No data yet.")
-            .setColor("Blue");
-
-        interaction.reply({ embeds: [embed] });
-    }
-
-    if (interaction.commandName === "shop") {
-        let text = "";
-        for (let item in shop) {
-            text += `**${item}** — ${shop[item].price} coins\n`;
-        }
-
-        const embed = new EmbedBuilder()
-            .setTitle("🛒 Shop")
-            .setDescription(text || "No items available.")
-            .setColor("Purple");
-
-        interaction.reply({ embeds: [embed] });
-    }
-
-    if (interaction.commandName === "buy") {
-        const item = interaction.options.getString("item").toLowerCase();
-
-        if (!shop[item]) {
-            const embed = new EmbedBuilder()
-                .setTitle("❌ Purchase Failed")
-                .setDescription("Item doesn't exist.")
-                .setColor("Red");
-            return interaction.reply({ embeds: [embed] });
-        }
-
-        if (user.money < shop[item].price) {
-            const embed = new EmbedBuilder()
-                .setTitle("❌ Purchase Failed")
-                .setDescription("Not enough coins.")
-                .setColor("Red");
-            return interaction.reply({ embeds: [embed] });
-        }
-
-        user.money -= shop[item].price;
-        user.inventory.push(item);
-        save();
-
-        const embed = new EmbedBuilder()
-            .setTitle("🛒 Purchase Successful")
-            .setDescription(`You bought **${shop[item].name}**`)
-            .setColor("Green");
-
-        interaction.reply({ embeds: [embed] });
-    }
-
 });
 
 });
