@@ -90,7 +90,7 @@ client.on("messageCreate", async message => {
     // DAILY
     if (args === "daily") {
         const now = Date.now();
-        const cooldown = 86400000; // 24 hours
+        const cooldown = 86400000;
 
         if (now - user.lastDaily < cooldown) {
             const embed = new EmbedBuilder()
@@ -115,7 +115,7 @@ client.on("messageCreate", async message => {
     // WORK
     if (args === "work") {
         const now = Date.now();
-        const cooldown = 60 * 60 * 1000; // 1 hour
+        const cooldown = 60 * 60 * 1000;
 
         if (user.lastWork && now - user.lastWork < cooldown) {
             const remaining = cooldown - (now - user.lastWork);
@@ -137,6 +137,67 @@ client.on("messageCreate", async message => {
         const embed = new EmbedBuilder()
             .setTitle("🎉 Work Reward")
             .setDescription(`You earned **${amount} coins**!`)
+            .setColor("Green");
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // SHOP
+    if (args === "shop") {
+        let text = "";
+        for (let item in shop) {
+            text += `**${item}** — ${shop[item].price} coins\n`;
+        }
+        const embed = new EmbedBuilder()
+            .setTitle("🛒 Shop")
+            .setDescription(text || "No items available.")
+            .setColor("Purple");
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // LEADERBOARD
+    if (args === "leaderboard") {
+        const sorted = Object.entries(data)
+            .sort((a, b) => b[1].money - a[1].money)
+            .slice(0, 10);
+
+        let text = "";
+        sorted.forEach((u, i) => {
+            text += `${i + 1}. <@${u[0]}> — ${u[1].money} coins\n`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle("🏆 Leaderboard")
+            .setDescription(text || "No data yet.")
+            .setColor("Blue");
+        return message.channel.send({ embeds: [embed] });
+    }
+
+    // BUY
+    if (args.startsWith("buy ")) {
+        const itemName = args.slice(4).trim().toLowerCase();
+        if (!shop[itemName]) {
+            const embed = new EmbedBuilder()
+                .setTitle("❌ Purchase Failed")
+                .setDescription("Item doesn't exist.")
+                .setColor("Red");
+            return message.channel.send({ embeds: [embed] });
+        }
+
+        if (user.money < shop[itemName].price) {
+            const embed = new EmbedBuilder()
+                .setTitle("❌ Purchase Failed")
+                .setDescription("Not enough coins.")
+                .setColor("Red");
+            return message.channel.send({ embeds: [embed] });
+        }
+
+        user.money -= shop[itemName].price;
+        user.inventory.push(itemName);
+        save();
+
+        const embed = new EmbedBuilder()
+            .setTitle("🛒 Purchase Successful")
+            .setDescription(`You bought **${shop[itemName].name}**`)
             .setColor("Green");
         return message.channel.send({ embeds: [embed] });
     }
