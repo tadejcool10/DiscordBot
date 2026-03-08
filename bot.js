@@ -27,6 +27,7 @@ function getUser(id) {
         data[id] = {
             money: 0,
             lastDaily: 0,
+            lastWork: 0,
             inventory: []
         };
     }
@@ -104,13 +105,22 @@ interaction.reply(`💰 You got **${reward} coins**!`);
 }
 
 if (interaction.commandName === "work") {
+const now = Date.now();
+const cooldown = 60 * 60 * 1000; // 1 hour in milliseconds
+
+if (user.lastWork && now - user.lastWork < cooldown) {
+    const remaining = cooldown - (now - user.lastWork);
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    return interaction.reply(`⏳ You need to wait **${minutes}m ${seconds}s** before working again.`);
+}
 
 const amount = 50;
-
 user.money += amount;
-interaction.reply(`🎉 You got **${amount} coins**`);
-
+user.lastWork = now;
 save();
+
+interaction.reply(`🎉 You got **${amount} coins**!`);
 }
 
 if (interaction.commandName === "leaderboard") {
