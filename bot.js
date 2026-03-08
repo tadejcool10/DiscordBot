@@ -15,6 +15,7 @@ const client = new Client({
 
 let data = {};
 const shop = {
+    lick: { price: 10000, name: "Lick", emoji: "👅" ,
     vip: { price: 2000, name: "VIP Role", emoji: "💎" },
     lucky: { price: 1000, name: "Lucky Charm", emoji: "🍀" },
     cookie: { price: 100, name: "Cookie", emoji: "🍪" }
