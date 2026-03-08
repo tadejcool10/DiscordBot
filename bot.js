@@ -25,7 +25,7 @@ function save() {
 function getUser(id) {
     if (!data[id]) {
         data[id] = {
-            money: 500,
+            money: 0,
             lastDaily: 0,
             inventory: []
         };
@@ -40,12 +40,8 @@ new SlashCommandBuilder()
 .setDescription("Claim daily reward"),
 
 new SlashCommandBuilder()
-.setName("gamble")
-.setDescription("Gamble coins")
-.addIntegerOption(o =>
-    o.setName("amount")
-    .setDescription("Coins to gamble")
-    .setRequired(true)),
+.setName("Work")
+.setDescription("Work to get money"),
 
 new SlashCommandBuilder()
 .setName("balance")
@@ -109,21 +105,10 @@ interaction.reply(`💰 You got **${reward} coins**!`);
 
 if (interaction.commandName === "gamble") {
 
-const amount = interaction.options.getInteger("amount");
+const amount = 50;
 
-if (user.money < amount) {
-return interaction.reply("❌ Not enough money.");
-}
-
-const win = Math.random() < 0.5;
-
-if (win) {
 user.money += amount;
-interaction.reply(`🎉 You won **${amount} coins**`);
-} else {
-user.money -= amount;
-interaction.reply(`💀 You lost **${amount} coins**`);
-}
+interaction.reply(`🎉 You got **${amount} coins**`);
 
 save();
 }
