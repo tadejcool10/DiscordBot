@@ -49,6 +49,7 @@ const commands = [
     new SlashCommandBuilder().setName("balance").setDescription("Check your balance"),
     new SlashCommandBuilder().setName("leaderboard").setDescription("Richest players"),
     new SlashCommandBuilder().setName("shop").setDescription("View the shop"),
+    new SlashCommandBuilder().setName("inventory").setDescription("View your inventory"),
     new SlashCommandBuilder()
         .setName("buy")
         .setDescription("Buy an item")
@@ -215,6 +216,39 @@ client.on("messageCreate", async message => {
             .setTimestamp();
         return message.channel.send({ embeds: [embed] });
     }
+
+    // INVENTORY
+    if (args === "inventory") {
+    
+        if (user.inventory.length === 0) {
+            const embed = new EmbedBuilder()
+                .setTitle("🎒 Inventory")
+                .setDescription("Your inventory is empty.")
+                .setColor("Grey");
+    
+            return message.channel.send({ embeds: [embed] });
+        }
+
+        let items = {};
+    
+        user.inventory.forEach(i => {
+            items[i] = (items[i] || 0) + 1;
+        });
+    
+        let text = "";
+    
+        Object.keys(items).forEach(i => {
+            text += `${shop[i].emoji} **${shop[i].name}** x${items[i]}\n`;
+        });
+    
+        const embed = new EmbedBuilder()
+            .setTitle(`🎒 ${message.author.username}'s Inventory`)
+            .setDescription(text)
+            .setColor("Orange")
+            .setFooter({ text: "GoodMC Bot • Your items" });
+
+        return message.channel.send({ embeds: [embed] });
+    }
 });
 
 // ====== SLASH COMMAND HANDLER ======
@@ -336,6 +370,37 @@ client.on("interactionCreate", async interaction => {
                 .setTimestamp();
             return interaction.reply({ embeds: [embed] });
     }
+
+    case "inventory":
+
+    if (user.inventory.length === 0) {
+        embed = new EmbedBuilder()
+            .setTitle("🎒 Inventory")
+            .setDescription("Your inventory is empty.")
+            .setColor("Grey");
+
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    let items = {};
+
+    user.inventory.forEach(i => {
+        items[i] = (items[i] || 0) + 1;
+    });
+
+    let text = "";
+
+    Object.keys(items).forEach(i => {
+        text += `${shop[i].emoji} **${shop[i].name}** x${items[i]}\n`;
+    });
+
+    embed = new EmbedBuilder()
+        .setTitle(`🎒 ${interaction.user.username}'s Inventory`)
+        .setDescription(text)
+        .setColor("Orange")
+        .setFooter({ text: "GoodMC Bot • Your items" });
+
+    return interaction.reply({ embeds: [embed] });
 });
 
 client.once("ready", () => console.log("Bot online"));
