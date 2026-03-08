@@ -78,96 +78,142 @@ console.log("Commands loaded");
 
 client.on("interactionCreate", async interaction => {
 
-if (!interaction.isChatInputCommand()) return;
+const { EmbedBuilder } = require('discord.js');
 
-const user = getUser(interaction.user.id);
+client.on("interactionCreate", async interaction => {
 
-if (interaction.commandName === "balance") {
-interaction.reply(`💰 Balance: **${user.money} coins**`);
-}
+    if (!interaction.isChatInputCommand()) return;
 
-if (interaction.commandName === "daily") {
+    const user = getUser(interaction.user.id);
 
-const now = Date.now();
-const cooldown = 86400000;
+    if (interaction.commandName === "balance") {
+        const embed = new EmbedBuilder()
+            .setTitle("💰 Balance")
+            .setDescription(`You have **${user.money} coins**`)
+            .setColor("Green");
 
-if (now - user.lastDaily < cooldown) {
-return interaction.reply("⏳ You already claimed your daily.");
-}
+        interaction.reply({ embeds: [embed] });
+    }
 
-const reward = 500;
+    if (interaction.commandName === "daily") {
+        const now = Date.now();
+        const cooldown = 86400000; // 24 hours
 
-user.money += reward;
-user.lastDaily = now;
-save();
+        if (now - user.lastDaily < cooldown) {
+            const embed = new EmbedBuilder()
+                .setTitle("⏳ Daily Reward")
+                .setDescription("You already claimed your daily reward!")
+                .setColor("Red");
+            return interaction.reply({ embeds: [embed] });
+        }
 
-interaction.reply(`💰 You got **${reward} coins**!`);
-}
+        const reward = 500;
+        user.money += reward;
+        user.lastDaily = now;
+        save();
 
-if (interaction.commandName === "work") {
-const now = Date.now();
-const cooldown = 60 * 60 * 1000; // 1 hour in milliseconds
+        const embed = new EmbedBuilder()
+            .setTitle("💰 Daily Reward")
+            .setDescription(`You received **${reward} coins**!`)
+            .setColor("Gold");
 
-if (user.lastWork && now - user.lastWork < cooldown) {
-    const remaining = cooldown - (now - user.lastWork);
-    const minutes = Math.floor(remaining / 60000);
-    const seconds = Math.floor((remaining % 60000) / 1000);
-    return interaction.reply(`⏳ You need to wait **${minutes}m ${seconds}s** before working again.`);
-}
+        interaction.reply({ embeds: [embed] });
+    }
 
-const amount = 50;
-user.money += amount;
-user.lastWork = now;
-save();
+    if (interaction.commandName === "work") {
+        const now = Date.now();
+        const cooldown = 60 * 60 * 1000; // 1 hour
 
-interaction.reply(`🎉 You got **${amount} coins**!`);
-}
+        if (user.lastWork && now - user.lastWork < cooldown) {
+            const remaining = cooldown - (now - user.lastWork);
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
 
-if (interaction.commandName === "leaderboard") {
+            const embed = new EmbedBuilder()
+                .setTitle("⏳ Work")
+                .setDescription(`You need to wait **${minutes}m ${seconds}s** before working again.`)
+                .setColor("Red");
 
-const sorted = Object.entries(data)
-.sort((a,b)=>b[1].money-a[1].money)
-.slice(0,10);
+            return interaction.reply({ embeds: [embed] });
+        }
 
-let text = "🏆 **Leaderboard**\n";
+        const amount = 50;
+        user.money += amount;
+        user.lastWork = now;
+        save();
 
-sorted.forEach((u,i)=>{
-text += `${i+1}. <@${u[0]}> — ${u[1].money} coins\n`;
+        const embed = new EmbedBuilder()
+            .setTitle("🎉 Work Reward")
+            .setDescription(`You earned **${amount} coins**!`)
+            .setColor("Green");
+
+        interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === "leaderboard") {
+        const sorted = Object.entries(data)
+            .sort((a, b) => b[1].money - a[1].money)
+            .slice(0, 10);
+
+        let text = "";
+        sorted.forEach((u, i) => {
+            text += `${i + 1}. <@${u[0]}> — ${u[1].money} coins\n`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle("🏆 Leaderboard")
+            .setDescription(text || "No data yet.")
+            .setColor("Blue");
+
+        interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === "shop") {
+        let text = "";
+        for (let item in shop) {
+            text += `**${item}** — ${shop[item].price} coins\n`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle("🛒 Shop")
+            .setDescription(text || "No items available.")
+            .setColor("Purple");
+
+        interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === "buy") {
+        const item = interaction.options.getString("item").toLowerCase();
+
+        if (!shop[item]) {
+            const embed = new EmbedBuilder()
+                .setTitle("❌ Purchase Failed")
+                .setDescription("Item doesn't exist.")
+                .setColor("Red");
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (user.money < shop[item].price) {
+            const embed = new EmbedBuilder()
+                .setTitle("❌ Purchase Failed")
+                .setDescription("Not enough coins.")
+                .setColor("Red");
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        user.money -= shop[item].price;
+        user.inventory.push(item);
+        save();
+
+        const embed = new EmbedBuilder()
+            .setTitle("🛒 Purchase Successful")
+            .setDescription(`You bought **${shop[item].name}**`)
+            .setColor("Green");
+
+        interaction.reply({ embeds: [embed] });
+    }
+
 });
-
-interaction.reply(text);
-}
-
-if (interaction.commandName === "shop") {
-
-let text = "🛒 **Shop**\n";
-
-for (let item in shop) {
-text += `**${item}** — ${shop[item].price} coins\n`;
-}
-
-interaction.reply(text);
-}
-
-if (interaction.commandName === "buy") {
-
-const item = interaction.options.getString("item").toLowerCase();
-
-if (!shop[item]) {
-return interaction.reply("❌ Item doesn't exist.");
-}
-
-if (user.money < shop[item].price) {
-return interaction.reply("❌ Not enough coins.");
-}
-
-user.money -= shop[item].price;
-user.inventory.push(item);
-
-save();
-
-interaction.reply(`🛒 You bought **${shop[item].name}**`);
-}
 
 });
 
