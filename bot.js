@@ -103,7 +103,7 @@ save();
 interaction.reply(`💰 You got **${reward} coins**!`);
 }
 
-if (interaction.commandName === "gamble") {
+if (interaction.commandName === "work") {
 
 const amount = 50;
 
