@@ -43,8 +43,8 @@ const shop = {
 };
 
 // ====== Slot Machine Emojis ======
-const spinEmoji = "<a:spin:1480244053198115049>";
-const slotEmojis = ["🍒","🍋","🍊","🍇","💎","🍀"];
+const spinEmoji = "<a:spin:1480248762789138656>";
+const slotEmojis = ["<:heart:1480248711308247163>","<:eggplant:1480249069614923937>","<:cherry:1480249175303131246>"];
 
 // ====== Slash Commands ======
 const commands = [
