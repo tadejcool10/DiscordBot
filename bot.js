@@ -1,11 +1,17 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = "1480186439890239498";
 const GUILD_ID = "1450556913300279393";
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ 
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageContent
+    ] 
+});
 
 let data = {};
 const shop = {
@@ -14,6 +20,7 @@ const shop = {
     cookie: { price: 100, name: "Cookie" }
 };
 
+// Load money data if exists
 if (fs.existsSync("money.json")) {
     data = JSON.parse(fs.readFileSync("money.json"));
 }
@@ -34,72 +41,53 @@ function getUser(id) {
     return data[id];
 }
 
+// Slash commands
 const commands = [
-
-new SlashCommandBuilder()
-.setName("daily")
-.setDescription("Claim daily reward"),
-
-new SlashCommandBuilder()
-.setName("work")
-.setDescription("Work to get money"),
-
-new SlashCommandBuilder()
-.setName("balance")
-.setDescription("Check your balance"),
-
-new SlashCommandBuilder()
-.setName("leaderboard")
-.setDescription("Richest players"),
-
-new SlashCommandBuilder()
-.setName("shop")
-.setDescription("View the shop"),
-
-new SlashCommandBuilder()
-.setName("buy")
-.setDescription("Buy an item")
-.addStringOption(o =>
-    o.setName("item")
-    .setDescription("Item name")
-    .setRequired(true))
-
+    new SlashCommandBuilder().setName("daily").setDescription("Claim daily reward"),
+    new SlashCommandBuilder().setName("work").setDescription("Work to get money"),
+    new SlashCommandBuilder().setName("balance").setDescription("Check your balance"),
+    new SlashCommandBuilder().setName("leaderboard").setDescription("Richest players"),
+    new SlashCommandBuilder().setName("shop").setDescription("View the shop"),
+    new SlashCommandBuilder()
+        .setName("buy")
+        .setDescription("Buy an item")
+        .addStringOption(o =>
+            o.setName("item")
+             .setDescription("Item name")
+             .setRequired(true)
+        )
 ].map(c => c.toJSON());
 
+// Register slash commands
 const rest = new REST({ version: "10" }).setToken(TOKEN);
-
 (async () => {
-await rest.put(
-Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-{ body: commands }
-);
-console.log("Commands loaded");
+    await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+        { body: commands }
+    );
+    console.log("Commands loaded");
 })();
 
-const { EmbedBuilder } = require('discord.js');
-
+// Handle message commands like "GoodMC balance"
 client.on("messageCreate", async message => {
-    // Ignore messages from bots
     if (message.author.bot) return;
 
-    // Convert message content to lowercase for easier checking
     const msg = message.content.toLowerCase();
-
-    // Check if it starts with "goodmc " and a command
     if (!msg.startsWith("goodmc ")) return;
 
-    const args = msg.slice(7).trim(); // remove "goodmc " part
+    const args = msg.slice(7).trim();
     const user = getUser(message.author.id);
 
+    // BALANCE
     if (args === "balance") {
         const embed = new EmbedBuilder()
             .setTitle("💰 Balance")
             .setDescription(`You have **${user.money} coins**`)
             .setColor("Green");
-
-        message.channel.send({ embeds: [embed] });
+        return message.channel.send({ embeds: [embed] });
     }
 
+    // DAILY
     if (args === "daily") {
         const now = Date.now();
         const cooldown = 86400000; // 24 hours
@@ -121,10 +109,10 @@ client.on("messageCreate", async message => {
             .setTitle("💰 Daily Reward")
             .setDescription(`You received **${reward} coins**!`)
             .setColor("Gold");
-
-        message.channel.send({ embeds: [embed] });
+        return message.channel.send({ embeds: [embed] });
     }
 
+    // WORK
     if (args === "work") {
         const now = Date.now();
         const cooldown = 60 * 60 * 1000; // 1 hour
@@ -138,7 +126,6 @@ client.on("messageCreate", async message => {
                 .setTitle("⏳ Work")
                 .setDescription(`You need to wait **${minutes}m ${seconds}s** before working again.`)
                 .setColor("Red");
-
             return message.channel.send({ embeds: [embed] });
         }
 
@@ -151,13 +138,82 @@ client.on("messageCreate", async message => {
             .setTitle("🎉 Work Reward")
             .setDescription(`You earned **${amount} coins**!`)
             .setColor("Green");
-
-        message.channel.send({ embeds: [embed] });
+        return message.channel.send({ embeds: [embed] });
     }
 });
 
-client.once("ready", ()=>{
-console.log("Bot online");
+// Handle slash commands
+client.on("interactionCreate", async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const user = getUser(interaction.user.id);
+
+    // BALANCE
+    if (interaction.commandName === "balance") {
+        const embed = new EmbedBuilder()
+            .setTitle("💰 Balance")
+            .setDescription(`You have **${user.money} coins**`)
+            .setColor("Green");
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // DAILY
+    if (interaction.commandName === "daily") {
+        const now = Date.now();
+        const cooldown = 86400000;
+
+        if (now - user.lastDaily < cooldown) {
+            const embed = new EmbedBuilder()
+                .setTitle("⏳ Daily Reward")
+                .setDescription("You already claimed your daily reward!")
+                .setColor("Red");
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        const reward = 500;
+        user.money += reward;
+        user.lastDaily = now;
+        save();
+
+        const embed = new EmbedBuilder()
+            .setTitle("💰 Daily Reward")
+            .setDescription(`You received **${reward} coins**!`)
+            .setColor("Gold");
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // WORK
+    if (interaction.commandName === "work") {
+        const now = Date.now();
+        const cooldown = 60 * 60 * 1000;
+
+        if (user.lastWork && now - user.lastWork < cooldown) {
+            const remaining = cooldown - (now - user.lastWork);
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+
+            const embed = new EmbedBuilder()
+                .setTitle("⏳ Work")
+                .setDescription(`You need to wait **${minutes}m ${seconds}s** before working again.`)
+                .setColor("Red");
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        const amount = 50;
+        user.money += amount;
+        user.lastWork = now;
+        save();
+
+        const embed = new EmbedBuilder()
+            .setTitle("🎉 Work Reward")
+            .setDescription(`You earned **${amount} coins**!`)
+            .setColor("Green");
+        return interaction.reply({ embeds: [embed] });
+    }
+});
+
+client.once("ready", () => {
+    console.log("Bot online");
 });
 
 client.login(TOKEN);
