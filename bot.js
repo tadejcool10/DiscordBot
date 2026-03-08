@@ -401,6 +401,7 @@ client.on("interactionCreate", async interaction => {
         .setFooter({ text: "GoodMC Bot • Your items" });
 
     return interaction.reply({ embeds: [embed] });
+}
 });
 
 client.once("ready", () => console.log("Bot online"));
