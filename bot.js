@@ -59,6 +59,14 @@ const commands = [
                 .setDescription("Item name")
                 .setRequired(true)
         )
+    new SlashCommandBuilder()
+        .setName("gamble")
+        .setDescription("Gamble your coins")
+        .addIntegerOption(o =>
+            o.setName("amount")
+                .setDescription("Coins to gamble")
+                .setRequired(true)
+        )
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -259,6 +267,64 @@ client.on("messageCreate", async message => {
         return message.channel.send({ embeds: [embed] });
     }
 
+    if (args.startsWith("gamble ")) {
+
+    const amount = parseInt(args.split(" ")[1]);
+    const user = getUser(message.author.id);
+
+    if (!amount || amount <= 0) {
+        return message.channel.send("❌ Invalid amount.");
+    }
+
+    if (user.money < amount) {
+        return message.channel.send("❌ You don't have enough coins.");
+    }
+
+    // send spinning animation
+    const spinMessage = await message.channel.send({
+        content: "🎰 Spinning...",
+        files: [{
+            attachment: "https://preview.redd.it/cbn9ix3lkung1.gif?width=64&format=mp4&s=6c0cfab5dee5bc515457490716025da8dacaff0f",
+            name: "spin.mp4"
+        }]
+    });
+
+    // wait 2 seconds
+    await new Promise(r => setTimeout(r, 2000));
+
+    const win = Math.random() < 0.45;
+
+    let resultText;
+
+    if (win) {
+
+        const winnings = amount * 2;
+        user.money += winnings;
+
+        resultText = `🎉 **YOU WON!**\nYou gained **${winnings} coins**`;
+
+    } else {
+
+        user.money -= amount;
+
+        resultText = `💀 **You lost!**\nLost **${amount} coins**`;
+
+    }
+
+    save();
+
+    const embed = new EmbedBuilder()
+        .setTitle("🎰 Casino")
+        .setDescription(resultText)
+        .setColor(win ? "Green" : "Red");
+
+    spinMessage.edit({
+        content: "",
+        embeds: [embed],
+        files: []
+    });
+}
+
 });
 
 /* SLASH COMMAND HANDLER */
@@ -330,6 +396,63 @@ client.on("interactionCreate", async interaction => {
             return interaction.reply({ embeds: [embed] });
 
     }
+
+    case "gamble": {
+
+    const amount = interaction.options.getInteger("amount");
+
+    if (amount <= 0) {
+        return interaction.reply("❌ Invalid amount.");
+    }
+
+    if (user.money < amount) {
+        return interaction.reply("❌ You don't have enough coins.");
+    }
+
+    // Send spinning animation
+    await interaction.reply({
+        content: "🎰 Spinning...",
+        files: [{
+            attachment: "https://preview.redd.it/cbn9ix3lkung1.gif?width=64&format=mp4&s=6c0cfab5dee5bc515457490716025da8dacaff0f",
+            name: "spin.mp4"
+        }]
+    });
+
+    // wait 2 seconds
+    await new Promise(r => setTimeout(r, 2000));
+
+    const win = Math.random() < 0.45;
+
+    let resultText;
+
+    if (win) {
+
+        const winnings = amount * 2;
+        user.money += winnings;
+
+        resultText = `🎉 **YOU WON!**\nYou gained **${winnings} coins**`;
+
+    } else {
+
+        user.money -= amount;
+
+        resultText = `💀 **You lost!**\nLost **${amount} coins**`;
+
+    }
+
+    save();
+
+    const embed = new EmbedBuilder()
+        .setTitle("🎰 Casino")
+        .setDescription(resultText)
+        .setColor(win ? "Green" : "Red");
+
+    return interaction.editReply({
+        content: "",
+        embeds: [embed],
+        files: []
+    });
+}
 
 });
 
