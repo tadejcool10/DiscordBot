@@ -2,8 +2,8 @@ const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require
 const fs = require('fs');
 
 const TOKEN = process.env.TOKEN;
-const CLIENT_ID = "YOUR_CLIENT_ID";
-const GUILD_ID = "YOUR_SERVER_ID";
+const CLIENT_ID = "1480186439890239498";
+const GUILD_ID = "1450556913300279393";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
