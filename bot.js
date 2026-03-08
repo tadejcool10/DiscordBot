@@ -76,8 +76,6 @@ Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 console.log("Commands loaded");
 })();
 
-client.on("interactionCreate", async interaction => {
-
 const { EmbedBuilder } = require('discord.js');
 
 client.on("messageCreate", async message => {
@@ -156,8 +154,6 @@ client.on("messageCreate", async message => {
 
         message.channel.send({ embeds: [embed] });
     }
-});
-
 });
 
 client.once("ready", ()=>{
