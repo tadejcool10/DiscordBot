@@ -58,7 +58,7 @@ const commands = [
             o.setName("item")
                 .setDescription("Item name")
                 .setRequired(true)
-        )
+        ),
     new SlashCommandBuilder()
         .setName("gamble")
         .setDescription("Gamble your coins")
@@ -107,12 +107,7 @@ client.on("messageCreate", async message => {
         const cooldown = 86400000;
 
         if (now - user.lastDaily < cooldown) {
-            const embed = new EmbedBuilder()
-                .setTitle("⏳ Daily Reward")
-                .setDescription("You already claimed your daily reward!")
-                .setColor("Red");
-
-            return message.channel.send({ embeds: [embed] });
+            return message.channel.send("⏳ You already claimed your daily reward.");
         }
 
         const reward = 500;
@@ -121,13 +116,7 @@ client.on("messageCreate", async message => {
         user.lastDaily = now;
         save();
 
-        const embed = new EmbedBuilder()
-            .setTitle("💰 Daily Reward")
-            .setDescription(`You received **${reward} coins**!`)
-            .setColor("Gold")
-            .setTimestamp();
-
-        return message.channel.send({ embeds: [embed] });
+        return message.channel.send(`💰 You received **${reward} coins**!`);
     }
 
     if (args === "work") {
@@ -136,18 +125,7 @@ client.on("messageCreate", async message => {
         const cooldown = 3600000;
 
         if (now - user.lastWork < cooldown) {
-
-            const remaining = cooldown - (now - user.lastWork);
-
-            const minutes = Math.floor(remaining / 60000);
-            const seconds = Math.floor((remaining % 60000) / 1000);
-
-            const embed = new EmbedBuilder()
-                .setTitle("⏳ Work")
-                .setDescription(`Wait **${minutes}m ${seconds}s** before working again.`)
-                .setColor("Red");
-
-            return message.channel.send({ embeds: [embed] });
+            return message.channel.send("⏳ You need to wait before working again.");
         }
 
         const amount = 50;
@@ -156,12 +134,7 @@ client.on("messageCreate", async message => {
         user.lastWork = now;
         save();
 
-        const embed = new EmbedBuilder()
-            .setTitle("🎉 Work Reward")
-            .setDescription(`You earned **${amount} coins**`)
-            .setColor("Green");
-
-        return message.channel.send({ embeds: [embed] });
+        return message.channel.send(`💼 You earned **${amount} coins**`);
     }
 
     if (args === "shop") {
@@ -180,71 +153,10 @@ client.on("messageCreate", async message => {
         return message.channel.send({ embeds: [embed] });
     }
 
-    if (args === "leaderboard") {
-
-        const sorted = Object.entries(data)
-            .sort((a, b) => b[1].money - a[1].money)
-            .slice(0, 10);
-
-        let text = "";
-
-        sorted.forEach((u, i) => {
-            text += `${i + 1}. <@${u[0]}> — ${u[1].money} coins\n`;
-        });
-
-        const embed = new EmbedBuilder()
-            .setTitle("🏆 Leaderboard")
-            .setDescription(text || "No data yet.")
-            .setColor("Blue");
-
-        return message.channel.send({ embeds: [embed] });
-    }
-
-    if (args.startsWith("buy ")) {
-
-        const itemName = args.slice(4).trim();
-
-        if (!shop[itemName]) {
-            return message.channel.send({
-                embeds: [new EmbedBuilder()
-                    .setTitle("❌ Purchase Failed")
-                    .setDescription("Item doesn't exist.")
-                    .setColor("Red")]
-            });
-        }
-
-        if (user.money < shop[itemName].price) {
-            return message.channel.send({
-                embeds: [new EmbedBuilder()
-                    .setTitle("❌ Purchase Failed")
-                    .setDescription("Not enough coins.")
-                    .setColor("Red")]
-            });
-        }
-
-        user.money -= shop[itemName].price;
-        user.inventory.push(itemName);
-
-        save();
-
-        return message.channel.send({
-            embeds: [new EmbedBuilder()
-                .setTitle("🛒 Purchase Successful")
-                .setDescription(`You bought **${shop[itemName].name}**`)
-                .setColor("Green")]
-        });
-    }
-
     if (args === "inventory") {
 
         if (user.inventory.length === 0) {
-
-            return message.channel.send({
-                embeds: [new EmbedBuilder()
-                    .setTitle("🎒 Inventory")
-                    .setDescription("Your inventory is empty.")
-                    .setColor("Grey")]
-            });
+            return message.channel.send("🎒 Your inventory is empty.");
         }
 
         const items = {};
@@ -256,74 +168,61 @@ client.on("messageCreate", async message => {
         let text = "";
 
         Object.keys(items).forEach(i => {
-            text += `${shop[i].emoji} **${shop[i].name}** x${items[i]}\n`;
+            text += `${shop[i].emoji} ${shop[i].name} x${items[i]}\n`;
         });
 
-        const embed = new EmbedBuilder()
-            .setTitle(`🎒 ${message.author.username}'s Inventory`)
-            .setDescription(text)
-            .setColor("Orange");
+        return message.channel.send(`🎒 **Inventory**\n${text}`);
+    }
 
-        return message.channel.send({ embeds: [embed] });
+    if (args.startsWith("buy ")) {
+
+        const itemName = args.slice(4).trim();
+
+        if (!shop[itemName]) return message.channel.send("❌ Item doesn't exist.");
+
+        if (user.money < shop[itemName].price) {
+            return message.channel.send("❌ Not enough coins.");
+        }
+
+        user.money -= shop[itemName].price;
+        user.inventory.push(itemName);
+
+        save();
+
+        return message.channel.send(`🛒 You bought **${shop[itemName].name}**`);
     }
 
     if (args.startsWith("gamble ")) {
 
-    const amount = parseInt(args.split(" ")[1]);
-    const user = getUser(message.author.id);
+        const amount = parseInt(args.split(" ")[1]);
 
-    if (!amount || amount <= 0) {
-        return message.channel.send("❌ Invalid amount.");
+        if (!amount || amount <= 0) return message.channel.send("❌ Invalid amount.");
+
+        if (user.money < amount) return message.channel.send("❌ You don't have enough coins.");
+
+        const spinMessage = await message.channel.send({
+            content: "🎰 Spinning...",
+            files: [{
+                attachment: "https://preview.redd.it/cbn9ix3lkung1.gif?width=64&format=mp4&s=6c0cfab5dee5bc515457490716025da8dacaff0f",
+                name: "spin.mp4"
+            }]
+        });
+
+        await new Promise(r => setTimeout(r, 2000));
+
+        const win = Math.random() < 0.45;
+
+        if (win) {
+            const winnings = amount * 2;
+            user.money += winnings;
+            await spinMessage.edit(`🎉 YOU WON **${winnings} coins**`);
+        } else {
+            user.money -= amount;
+            await spinMessage.edit(`💀 You lost **${amount} coins**`);
+        }
+
+        save();
     }
-
-    if (user.money < amount) {
-        return message.channel.send("❌ You don't have enough coins.");
-    }
-
-    // send spinning animation
-    const spinMessage = await message.channel.send({
-        content: "🎰 Spinning...",
-        files: [{
-            attachment: "https://preview.redd.it/cbn9ix3lkung1.gif?width=64&format=mp4&s=6c0cfab5dee5bc515457490716025da8dacaff0f",
-            name: "spin.mp4"
-        }]
-    });
-
-    // wait 2 seconds
-    await new Promise(r => setTimeout(r, 2000));
-
-    const win = Math.random() < 0.45;
-
-    let resultText;
-
-    if (win) {
-
-        const winnings = amount * 2;
-        user.money += winnings;
-
-        resultText = `🎉 **YOU WON!**\nYou gained **${winnings} coins**`;
-
-    } else {
-
-        user.money -= amount;
-
-        resultText = `💀 **You lost!**\nLost **${amount} coins**`;
-
-    }
-
-    save();
-
-    const embed = new EmbedBuilder()
-        .setTitle("🎰 Casino")
-        .setDescription(resultText)
-        .setColor(win ? "Green" : "Red");
-
-    spinMessage.edit({
-        content: "",
-        embeds: [embed],
-        files: []
-    });
-}
 
 });
 
@@ -334,125 +233,65 @@ client.on("interactionCreate", async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     const user = getUser(interaction.user.id);
-    const now = Date.now();
 
-    let embed;
-
-    switch (interaction.commandName) {
-
-        case "balance":
-
-            embed = new EmbedBuilder()
-                .setTitle("💰 Balance")
-                .setDescription(`You have **${user.money} coins**`)
-                .setColor("Green");
-
-            return interaction.reply({ embeds: [embed] });
-
-        case "inventory":
-
-            if (user.inventory.length === 0) {
-
-                embed = new EmbedBuilder()
-                    .setTitle("🎒 Inventory")
-                    .setDescription("Your inventory is empty.")
-                    .setColor("Grey");
-
-                return interaction.reply({ embeds: [embed] });
-            }
-
-            const items = {};
-
-            user.inventory.forEach(i => {
-                items[i] = (items[i] || 0) + 1;
-            });
-
-            let text = "";
-
-            Object.keys(items).forEach(i => {
-                text += `${shop[i].emoji} **${shop[i].name}** x${items[i]}\n`;
-            });
-
-            embed = new EmbedBuilder()
-                .setTitle(`🎒 ${interaction.user.username}'s Inventory`)
-                .setDescription(text)
-                .setColor("Orange");
-
-            return interaction.reply({ embeds: [embed] });
-
-        case "shop":
-
-            embed = new EmbedBuilder()
-                .setTitle("🛒 Shop")
-                .setColor("Purple")
-                .addFields(
-                    Object.keys(shop).map(item => ({
-                        name: `${shop[item].emoji} ${shop[item].name}`,
-                        value: `${shop[item].price} coins`,
-                        inline: true
-                    }))
-                );
-
-            return interaction.reply({ embeds: [embed] });
-
+    if (interaction.commandName === "balance") {
+        return interaction.reply(`💰 You have **${user.money} coins**`);
     }
 
-    case "gamble": {
-
-    const amount = interaction.options.getInteger("amount");
-
-    if (amount <= 0) {
-        return interaction.reply("❌ Invalid amount.");
+    if (interaction.commandName === "shop") {
+        let text = "";
+        Object.keys(shop).forEach(i => {
+            text += `${shop[i].emoji} ${shop[i].name} — ${shop[i].price} coins\n`;
+        });
+        return interaction.reply(`🛒 **Shop**\n${text}`);
     }
 
-    if (user.money < amount) {
-        return interaction.reply("❌ You don't have enough coins.");
+    if (interaction.commandName === "inventory") {
+
+        if (user.inventory.length === 0) {
+            return interaction.reply("🎒 Your inventory is empty.");
+        }
+
+        const items = {};
+        user.inventory.forEach(i => items[i] = (items[i] || 0) + 1);
+
+        let text = "";
+        Object.keys(items).forEach(i => {
+            text += `${shop[i].emoji} ${shop[i].name} x${items[i]}\n`;
+        });
+
+        return interaction.reply(`🎒 **Inventory**\n${text}`);
     }
 
-    // Send spinning animation
-    await interaction.reply({
-        content: "🎰 Spinning...",
-        files: [{
-            attachment: "https://preview.redd.it/cbn9ix3lkung1.gif?width=64&format=mp4&s=6c0cfab5dee5bc515457490716025da8dacaff0f",
-            name: "spin.mp4"
-        }]
-    });
+    if (interaction.commandName === "gamble") {
 
-    // wait 2 seconds
-    await new Promise(r => setTimeout(r, 2000));
+        const amount = interaction.options.getInteger("amount");
 
-    const win = Math.random() < 0.45;
+        if (user.money < amount) return interaction.reply("❌ Not enough coins.");
 
-    let resultText;
+        await interaction.reply({
+            content: "🎰 Spinning...",
+            files: [{
+                attachment: "https://preview.redd.it/cbn9ix3lkung1.gif?width=64&format=mp4&s=6c0cfab5dee5bc515457490716025da8dacaff0f",
+                name: "spin.mp4"
+            }]
+        });
 
-    if (win) {
+        await new Promise(r => setTimeout(r, 2000));
 
-        const winnings = amount * 2;
-        user.money += winnings;
+        const win = Math.random() < 0.45;
 
-        resultText = `🎉 **YOU WON!**\nYou gained **${winnings} coins**`;
-
-    } else {
-
-        user.money -= amount;
-
-        resultText = `💀 **You lost!**\nLost **${amount} coins**`;
-
+        if (win) {
+            const winnings = amount * 2;
+            user.money += winnings;
+            save();
+            return interaction.editReply(`🎉 YOU WON **${winnings} coins**`);
+        } else {
+            user.money -= amount;
+            save();
+            return interaction.editReply(`💀 You lost **${amount} coins**`);
+        }
     }
-
-    save();
-
-    const embed = new EmbedBuilder()
-        .setTitle("🎰 Casino")
-        .setDescription(resultText)
-        .setColor(win ? "Green" : "Red");
-
-    return interaction.editReply({
-        content: "",
-        embeds: [embed],
-        files: []
-    });
-}
 
 });
 
