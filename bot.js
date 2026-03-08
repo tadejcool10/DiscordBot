@@ -371,8 +371,7 @@ client.on("interactionCreate", async interaction => {
             return interaction.reply({ embeds: [embed] });
     }
 
-    case "inventory":
-
+    case "inventory": {
     if (user.inventory.length === 0) {
         embed = new EmbedBuilder()
             .setTitle("🎒 Inventory")
@@ -382,7 +381,7 @@ client.on("interactionCreate", async interaction => {
         return interaction.reply({ embeds: [embed] });
     }
 
-    let items = {};
+    const items = {};
 
     user.inventory.forEach(i => {
         items[i] = (items[i] || 0) + 1;
