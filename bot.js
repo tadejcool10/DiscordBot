@@ -40,7 +40,7 @@ new SlashCommandBuilder()
 .setDescription("Claim daily reward"),
 
 new SlashCommandBuilder()
-.setName("Work")
+.setName("work")
 .setDescription("Work to get money"),
 
 new SlashCommandBuilder()
