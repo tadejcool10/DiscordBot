@@ -173,16 +173,19 @@ client.on("messageCreate", async message => {
         }
 
         // Determine win/loss
-        let winChance = 0.15;
-
-        if (user.luckyBoost) {
-            winChance = 0.35;
+        let win = finalResult[0] === finalResult[1] && finalResult[1] === finalResult[2];
+        
+        // Lucky charm gives a second chance
+        if (!win && user.luckyBoost) {
             user.luckyBoost = false;
+        
+            if (Math.random() < 0.35) {
+                win = true;
+            }
         }
 
-        let win = Math.random() < winChance;
-            let winnings = win ? amount*2 : -amount;
-            user.money += winnings;
+        let winnings = win ? amount * 2 : -amount;
+        user.money += winnings;
 
         // Final result embed
         const finalEmbed = new EmbedBuilder()
