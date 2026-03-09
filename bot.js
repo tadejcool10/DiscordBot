@@ -1,346 +1,253 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 const TOKEN = process.env.TOKEN;
+const CLIENT_ID = "1480186439890239498";
+const GUILD_ID = "1450556913300279393";
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
+// In-memory economy data
 let data = {};
 
-/* SHOP */
+// Shop items
 const shop = {
-  lucky: { price: 1000, name: "Lucky Charm", emoji: "🍀" },
-  cookie: { price: 100, name: "Cookie", emoji: "🍪" },
-  vip: { price: 2000, name: "VIP Role", emoji: "💎" },
-  lick: { price: 10000, name: "Lick", emoji: "👅" }
+    lick: { price: 10000, name: "Lick", emoji: "👅" },
+    vip: { price: 2000, name: "VIP Role", emoji: "💎" },
+    lucky: { price: 1000, name: "Lucky Charm", emoji: "🍀" },
+    cookie: { price: 100, name: "Cookie", emoji: "🍪" }
 };
+
+// Get or create user
+function getUser(id) {
+    if (!data[id]) {
+        data[id] = {
+            money: 1000,
+            lastDaily: 0,
+            lastWork: 0,
+            inventory: []
+        };
+    }
+    return data[id];
+}
+
+/* SLASH COMMANDS */
+const commands = [
+    new SlashCommandBuilder().setName("daily").setDescription("Claim daily reward"),
+    new SlashCommandBuilder().setName("work").setDescription("Work to get money"),
+    new SlashCommandBuilder().setName("balance").setDescription("Check your balance"),
+    new SlashCommandBuilder().setName("leaderboard").setDescription("Richest players"),
+    new SlashCommandBuilder().setName("shop").setDescription("View the shop"),
+    new SlashCommandBuilder().setName("inventory").setDescription("View your inventory"),
+    new SlashCommandBuilder()
+        .setName("buy")
+        .setDescription("Buy an item")
+        .addStringOption(o =>
+            o.setName("item")
+             .setDescription("Item name")
+             .setRequired(true)
+        ),
+    new SlashCommandBuilder()
+        .setName("gamble")
+        .setDescription("Gamble your coins")
+        .addIntegerOption(o =>
+            o.setName("amount")
+             .setDescription("Coins to gamble")
+             .setRequired(true)
+        )
+].map(c => c.toJSON());
+
+const rest = new REST({ version: "10" }).setToken(TOKEN);
+(async () => {
+    await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+        { body: commands }
+    );
+    console.log("Commands loaded");
+})();
 
 /* SLOT EMOJIS */
 const spinEmoji = "<a:spin:1480248762789138656>";
-
 const slotEmojis = [
-  "<:cherry:1480249175303131246>",
-  "<:eggplant:1480249069614923937>",
-  "<:heart:1480248711308247163>",
-  "💎",
-  "🍀"
+    "<:cherry:1480249175303131246>",
+    "<:eggplant:1480249069614923937>",
+    "<:heart:1480248711308247163>",
+    "<:tounge:1480290929146335342>",
+    "<:clover:1480290939913244906>",
+    "<:gem:1480290950856311064>",
+    "<:cookie:1480290977959903274>",
+    "<:moneybag:1480291022817984582>"
 ];
 
-/* USER DATA */
-function getUser(id) {
-  if (!data[id]) {
-    data[id] = {
-      money: 1000,
-      inventory: [],
-      luckyBoost: false,
-      lastDaily: 0,
-      lastWork: 0
-    };
-  }
-  return data[id];
-}
-
-client.once("ready", () => {
-  console.log("Casino bot ready 🎰");
-});
-
-/* COMMANDS */
+/* MESSAGE COMMANDS */
 client.on("messageCreate", async message => {
+    if (message.author.bot) return;
+    const msg = message.content.toLowerCase();
+    if (!msg.startsWith("goodmc ")) return;
+    const args = msg.slice(7).trim();
+    const user = getUser(message.author.id);
 
-  if (message.author.bot) return;
-  if (!message.content.toLowerCase().startsWith("goodmc ")) return;
-
-  const args = message.content.slice(7).trim().split(" ");
-  const cmd = args[0];
-  const user = getUser(message.author.id);
-
-  const now = Date.now();
-
-  /* DAILY */
-  if (cmd === "daily") {
-
-    const cooldown = 24 * 60 * 60 * 1000;
-
-    if (now - user.lastDaily < cooldown) {
-
-      const remaining = cooldown - (now - user.lastDaily);
-      const hours = Math.floor(remaining / 3600000);
-
-      return message.channel.send(`⏳ You already claimed daily. Come back in **${hours}h**`);
+    /* BASIC ECONOMY */
+    if (args === "balance") {
+        return message.channel.send({ embeds: [new EmbedBuilder().setTitle("💰 Balance").setDescription(`You have **${user.money} coins**`).setColor("Green")] });
     }
 
-    const reward = 500;
-
-    user.money += reward;
-    user.lastDaily = now;
-
-    return message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-        .setTitle("🎁 Daily Reward")
-        .setDescription(`You received **${reward} coins**`)
-        .setColor("Gold")
-      ]
-    });
-
-  }
-
-  /* WORK */
-  if (cmd === "work") {
-
-    const cooldown = 60 * 60 * 1000;    if (now - user.lastWork < cooldown) {
-
-      const remaining = cooldown - (now - user.lastWork);
-      const minutes = Math.floor(remaining / 60000);
-      const seconds = Math.floor((remaining % 60000) / 1000);
-
-      return message.channel.send(
-        `⏳ You are tired. Work again in **${minutes}m ${seconds}s**`
-      );
+    if (args === "daily") {
+        const now = Date.now();
+        if (now - user.lastDaily < 86400000) return message.channel.send({ embeds: [new EmbedBuilder().setTitle("⏳ Daily").setDescription("Already claimed daily!").setColor("Red")] });
+        const reward = 500;
+        user.money += reward; user.lastDaily = now;
+        return message.channel.send({ embeds: [new EmbedBuilder().setTitle("💰 Daily").setDescription(`You received **${reward} coins**!`).setColor("Gold")] });
     }
 
-    const earnings = Math.floor(Math.random() * 150) + 50;
-
-    user.money += earnings;
-    user.lastWork = now;
-
-    return message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("💼 Work Complete")
-          .setDescription(`You worked and earned **${earnings} coins**`)
-          .setColor("Green")
-      ]
-    });
-
-  }
-
-  /* BALANCE */
-  if (cmd === "balance") {
-
-    return message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("💰 Balance")
-          .setDescription(`You have **${user.money} coins**`)
-          .setColor("Green")
-      ]
-    });
-
-  }
-
-  /* SHOP */
-  if (cmd === "shop") {
-
-    let text = "";
-
-    for (let item in shop) {
-      text += `${shop[item].emoji} **${shop[item].name}** — ${shop[item].price} coins\n`;
+    if (args === "work") {
+        const now = Date.now();
+        if (now - user.lastWork < 3600000) {
+            const rem = 3600000 - (now - user.lastWork);
+            const m = Math.floor(rem/60000), s = Math.floor((rem%60000)/1000);
+            return message.channel.send({ embeds: [new EmbedBuilder().setTitle("⏳ Work").setDescription(`Wait **${m}m ${s}s**`).setColor("Red")] });
+        }
+        const amount = 50;
+        user.money += amount; user.lastWork = now;
+        return message.channel.send({ embeds: [new EmbedBuilder().setTitle("🎉 Work").setDescription(`You earned **${amount} coins**`).setColor("Green")] });
     }
 
-    return message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("🛒 Shop")
-          .setDescription(text)
-          .setColor("Purple")
-      ]
-    });
-
-  }
-
-  /* BUY */
-  if (cmd === "buy") {
-
-    const item = args[1];
-
-    if (!shop[item]) return message.channel.send("❌ Item doesn't exist.");
-
-    if (user.money < shop[item].price)
-      return message.channel.send("❌ Not enough coins.");
-
-    user.money -= shop[item].price;
-    user.inventory.push(item);
-
-    return message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle("🛒 Purchase Successful")
-          .setDescription(`You bought **${shop[item].name}** ${shop[item].emoji}`)
-          .setColor("Green")
-      ]
-    });
-
-  }
-
-  /* INVENTORY */
-  if (cmd === "inventory") {
-
-    if (user.inventory.length === 0)
-      return message.channel.send("🎒 Your inventory is empty.");
-
-    let counts = {};
-
-    user.inventory.forEach(i => {
-      counts[i] = (counts[i] || 0) + 1;
-    });
-
-    let text = "";
-
-    for (let i in counts) {
-      text += `${shop[i].emoji} **${shop[i].name}** x${counts[i]}\n`;
+    if (args === "shop") {
+        return message.channel.send({ embeds: [new EmbedBuilder().setTitle("🛒 Shop").setColor("Purple").addFields(Object.keys(shop).map(i=>({name:`${shop[i].emoji} ${shop[i].name}`, value:`${shop[i].price} coins`, inline:true})))] });
     }
 
-    return message.channel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(`${message.author.username}'s Inventory`)
-          .setDescription(text)
-          .setColor("Orange")
-      ]
-    });
-
-  }
-
-  /* USE ITEM */
-  if (cmd === "use") {
-
-    const item = args[1];
-
-    if (!user.inventory.includes(item))
-      return message.channel.send("❌ You don't own this item.");
-
-    if (item === "lucky") {
-
-      const index = user.inventory.indexOf("lucky");
-      user.inventory.splice(index, 1);
-
-      user.luckyBoost = true;
-
-      return message.channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("🍀 Lucky Charm Used")
-            .setDescription("Your **next gamble has higher win chance!**")
-            .setColor("Green")
-        ]
-      });
-
+    if (args === "leaderboard") {
+        const sorted = Object.entries(data).sort((a,b)=>b[1].money - a[1].money).slice(0,10);
+        let text = "";
+        sorted.forEach((u,i)=>text+=`${i+1}. <@${u[0]}> — ${u[1].money} coins\n`);
+        return message.channel.send({ embeds: [new EmbedBuilder().setTitle("🏆 Leaderboard").setDescription(text || "No data yet").setColor("Blue")] });
     }
 
-  }
-
-  /* GAMBLE */
-  if (cmd === "gamble") {
-
-    const amount = parseInt(args[1]);
-
-    if (!amount || amount <= 0)
-      return message.channel.send("❌ Invalid amount.");
-
-    if (user.money < amount)
-      return message.channel.send("❌ Not enough coins.");
-
-    let results = ["", "", ""];
-
-    const embed = new EmbedBuilder()
-      .setTitle("🎰 Casino")
-      .setDescription(`${spinEmoji} ${spinEmoji} ${spinEmoji}`)
-      .setColor("Purple");
-
-    const spinMsg = await message.channel.send({ embeds: [embed] });
-
-    for (let i = 0; i < 3; i++) {
-
-      await new Promise(r => setTimeout(r, 1000));
-
-      results[i] = slotEmojis[Math.floor(Math.random() * slotEmojis.length)];
-
-      const display = results.map(e => e || spinEmoji).join(" ");
-
-      const newEmbed = new EmbedBuilder()
-        .setTitle("🎰 Casino")
-        .setDescription(display)
-        .setColor("Purple");
-
-      await spinMsg.edit({ embeds: [newEmbed] });
-
+    if (args.startsWith("buy ")) {
+        const itemName = args.slice(4).trim();
+        if (!shop[itemName]) return message.channel.send({ embeds: [new EmbedBuilder().setTitle("❌ Purchase Failed").setDescription("Item doesn't exist").setColor("Red")] });
+        if (user.money < shop[itemName].price) return message.channel.send({ embeds: [new EmbedBuilder().setTitle("❌ Purchase Failed").setDescription("Not enough coins").setColor("Red")] });
+        user.money -= shop[itemName].price; user.inventory.push(itemName);
+        return message.channel.send({ embeds: [new EmbedBuilder().setTitle("🛒 Purchased").setDescription(`You bought **${shop[itemName].name}**`).setColor("Green")] });
     }
 
-    let winChance = 0.2;
-
-    if (user.luckyBoost) {
-      winChance = 0.4;
-      user.luckyBoost = false;
+    if (args === "inventory") {
+        if (!user.inventory.length) return message.channel.send({ embeds: [new EmbedBuilder().setTitle("🎒 Inventory").setDescription("Empty").setColor("Grey")] });
+        const counts={}; user.inventory.forEach(i=>counts[i]=(counts[i]||0)+1);
+        let text=""; Object.keys(counts).forEach(i=>text+=`${shop[i].emoji} **${shop[i].name}** x${counts[i]}\n`);
+        return message.channel.send({ embeds: [new EmbedBuilder().setTitle(`🎒 ${message.author.username}'s Inventory`).setDescription(text).setColor("Orange")] });
     }
 
-    let win = Math.random() < winChance;
+    /* GAMBLE COMMAND */
+    if (args.startsWith("gamble ")) {
+        const amount = parseInt(args.split(" ")[1]);
+        if (!amount || amount <= 0) return message.channel.send("❌ Invalid amount");
+        if (user.money < amount) return message.channel.send("❌ Not enough coins");
 
-    if (win) {
+        // Initialize spins
+        let finalResult = ["", "", ""];
+        const spinEmbed = new EmbedBuilder()
+            .setTitle("🎰 Casino")
+            .setDescription(`${spinEmoji} ${spinEmoji} ${spinEmoji}`)
+            .setColor("Purple");
+        const spinMsg = await message.channel.send({ embeds: [spinEmbed] });
 
-      const winnings = amount * 2;
-      user.money += winnings;
+        // Animate each reel
+        for (let i = 0; i < 3; i++) {
+            await new Promise(r => setTimeout(r, 1000)); // 1 sec per reel
+            finalResult[i] = slotEmojis[Math.floor(Math.random() * slotEmojis.length)];
 
-      return spinMsg.edit({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("🎉 YOU WON!")
-            .setDescription(`${results.join(" ")}\n\n+${winnings} coins`)
-            .setColor("Green")
-        ]
-      });
+            // Show updated embed
+            const description = finalResult.map((e,j)=> e || spinEmoji).join(" ");
+            const embed = new EmbedBuilder()
+                .setTitle("🎰 Casino")
+                .setDescription(description)
+                .setColor("Purple");
+            await spinMsg.edit({ embeds: [embed] });
+        }
 
-    } else {
+        // Determine win/loss
+        let win = finalResult[0] === finalResult[1] && finalResult[1] === finalResult[2];
+        let winnings = win ? amount*2 : -amount;
+        user.money += winnings;
 
-      user.money -= amount;
-
-      return spinMsg.edit({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("💀 You Lost")
-            .setDescription(`${results.join(" ")}\n\n-${amount} coins`)
-            .setColor("Red")
-        ]
-      });
-
+        // Final result embed
+        const finalEmbed = new EmbedBuilder()
+            .setTitle("🎰 Casino Result")
+            .setDescription(`${finalResult.join(" ")}\n\n${win ? `🎉 YOU WON! +${winnings} coins` : `💀 You lost! ${-winnings} coins`}`)
+            .setColor(win ? "Green" : "Red");
+        return spinMsg.edit({ embeds: [finalEmbed] });
     }
-
-  }
-
 });
-if (cmd === "leaderboard") {
 
-  const sorted = Object.entries(data)
-    .sort((a, b) => b[1].money - a[1].money)
-    .slice(0, 10);
+/* SLASH COMMAND HANDLER */
+client.on("interactionCreate", async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+    const user = getUser(interaction.user.id);
+    const now = Date.now();
+    let embed;
 
-  if (sorted.length === 0) {
-    return message.channel.send("🏆 No leaderboard data yet.");
-  }
+    switch(interaction.commandName){
+        case "balance":
+            embed = new EmbedBuilder().setTitle("💰 Balance").setDescription(`You have **${user.money} coins**`).setColor("Green");
+            return interaction.reply({ embeds: [embed] });
 
-  let text = "";
+        case "inventory":
+            if (!user.inventory.length) { embed = new EmbedBuilder().setTitle("🎒 Inventory").setDescription("Empty").setColor("Grey"); return interaction.reply({ embeds: [embed] }); }
+            const counts = {}; user.inventory.forEach(i=>counts[i]=(counts[i]||0)+1);
+            let text = ""; Object.keys(counts).forEach(i=>text+=`${shop[i].emoji} **${shop[i].name}** x${counts[i]}\n`);
+            embed = new EmbedBuilder().setTitle(`🎒 ${interaction.user.username}'s Inventory`).setDescription(text).setColor("Orange");
+            return interaction.reply({ embeds: [embed] });
 
-  sorted.forEach((userData, index) => {
-    const userId = userData[0];
-    const money = userData[1].money;
+        case "shop":
+            embed = new EmbedBuilder().setTitle("🛒 Shop").setColor("Purple").addFields(Object.keys(shop).map(i=>({name:`${shop[i].emoji} ${shop[i].name}`, value:`${shop[i].price} coins`, inline:true})));
+            return interaction.reply({ embeds: [embed] });
 
-    text += `**${index + 1}.** <@${userId}> — ${money} coins\n`;
-  });
+        case "gamble": {
+            const amount = interaction.options.getInteger("amount");
+            if (!amount || amount <= 0) return interaction.reply("❌ Invalid amount");
+            if (user.money < amount) return interaction.reply("❌ Not enough coins");
 
-  return message.channel.send({
-    embeds: [
-      new EmbedBuilder()
-        .setTitle("🏆 Richest Players")
-        .setDescription(text)
-        .setColor("Gold")
-    ]
-  });
+            // Initialize spins
+            let finalResult = ["", "", ""];
+            const spinEmbed = new EmbedBuilder()
+                .setTitle("🎰 Casino")
+                .setDescription(`${spinEmoji} ${spinEmoji} ${spinEmoji}`)
+                .setColor("Purple");
+            await interaction.reply({ embeds: [spinEmbed] });
+            const spinMsg = await interaction.fetchReply();
 
-}
+            // Animate each reel
+            for (let i = 0; i < 3; i++) {
+                await new Promise(r => setTimeout(r, 1000));
+                finalResult[i] = slotEmojis[Math.floor(Math.random() * slotEmojis.length)];
 
+                const description = finalResult.map((e,j)=> e || spinEmoji).join(" ");
+                const embed = new EmbedBuilder()
+                    .setTitle("🎰 Casino")
+                    .setDescription(description)
+                    .setColor("Purple");
+                await spinMsg.edit({ embeds: [embed] });
+            }
+
+            // Determine win/loss
+            let win = finalResult[0] === finalResult[1] && finalResult[1] === finalResult[2];
+            let winnings = win ? amount*2 : -amount;
+            user.money += winnings;
+
+            const finalEmbed = new EmbedBuilder()
+                .setTitle("🎰 Casino Result")
+                .setDescription(`${finalResult.join(" ")}\n\n${win ? `🎉 YOU WON! +${winnings} coins` : `💀 You lost! ${-winnings} coins`}`)
+                .setColor(win ? "Green" : "Red");
+            return spinMsg.edit({ embeds: [finalEmbed] });
+        }
+    }
+});
+
+client.once("ready", () => console.log("Bot online"));
 client.login(TOKEN);
