@@ -37,18 +37,19 @@ function getUser(id) {
     data[id] = {
       money: 1000,
       inventory: [],
-      luckyBoost: false
+      luckyBoost: false,
+      lastDaily: 0,
+      lastWork: 0
     };
   }
   return data[id];
 }
 
-/* BOT READY */
 client.once("ready", () => {
   console.log("Casino bot ready 🎰");
 });
 
-/* MESSAGE COMMANDS */
+/* COMMANDS */
 client.on("messageCreate", async message => {
 
   if (message.author.bot) return;
@@ -58,16 +59,79 @@ client.on("messageCreate", async message => {
   const cmd = args[0];
   const user = getUser(message.author.id);
 
-  /* BALANCE */
-  if (cmd === "balance") {
+  const now = Date.now();
+
+  /* DAILY */
+  if (cmd === "daily") {
+
+    const cooldown = 24 * 60 * 60 * 1000;
+
+    if (now - user.lastDaily < cooldown) {
+
+      const remaining = cooldown - (now - user.lastDaily);
+      const hours = Math.floor(remaining / 3600000);
+
+      return message.channel.send(`⏳ You already claimed daily. Come back in **${hours}h**`);
+    }
+
+    const reward = 500;
+
+    user.money += reward;
+    user.lastDaily = now;
+
     return message.channel.send({
       embeds: [
         new EmbedBuilder()
-        .setTitle("💰 Balance")
-        .setDescription(`You have **${user.money} coins**`)
-        .setColor("Green")
+        .setTitle("🎁 Daily Reward")
+        .setDescription(`You received **${reward} coins**`)
+        .setColor("Gold")
       ]
     });
+
+  }
+
+  /* WORK */
+  if (cmd === "work") {
+
+    const cooldown = 60 * 60 * 1000;    if (now - user.lastWork < cooldown) {
+
+      const remaining = cooldown - (now - user.lastWork);
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+
+      return message.channel.send(
+        `⏳ You are tired. Work again in **${minutes}m ${seconds}s**`
+      );
+    }
+
+    const earnings = Math.floor(Math.random() * 150) + 50;
+
+    user.money += earnings;
+    user.lastWork = now;
+
+    return message.channel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("💼 Work Complete")
+          .setDescription(`You worked and earned **${earnings} coins**`)
+          .setColor("Green")
+      ]
+    });
+
+  }
+
+  /* BALANCE */
+  if (cmd === "balance") {
+
+    return message.channel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("💰 Balance")
+          .setDescription(`You have **${user.money} coins**`)
+          .setColor("Green")
+      ]
+    });
+
   }
 
   /* SHOP */
@@ -82,9 +146,9 @@ client.on("messageCreate", async message => {
     return message.channel.send({
       embeds: [
         new EmbedBuilder()
-        .setTitle("🛒 Shop")
-        .setDescription(text)
-        .setColor("Purple")
+          .setTitle("🛒 Shop")
+          .setDescription(text)
+          .setColor("Purple")
       ]
     });
 
@@ -95,13 +159,10 @@ client.on("messageCreate", async message => {
 
     const item = args[1];
 
-    if (!shop[item]) {
-      return message.channel.send("❌ Item doesn't exist.");
-    }
+    if (!shop[item]) return message.channel.send("❌ Item doesn't exist.");
 
-    if (user.money < shop[item].price) {
+    if (user.money < shop[item].price)
       return message.channel.send("❌ Not enough coins.");
-    }
 
     user.money -= shop[item].price;
     user.inventory.push(item);
@@ -109,9 +170,9 @@ client.on("messageCreate", async message => {
     return message.channel.send({
       embeds: [
         new EmbedBuilder()
-        .setTitle("🛒 Purchase Successful")
-        .setDescription(`You bought **${shop[item].name}** ${shop[item].emoji}`)
-        .setColor("Green")
+          .setTitle("🛒 Purchase Successful")
+          .setDescription(`You bought **${shop[item].name}** ${shop[item].emoji}`)
+          .setColor("Green")
       ]
     });
 
@@ -120,9 +181,8 @@ client.on("messageCreate", async message => {
   /* INVENTORY */
   if (cmd === "inventory") {
 
-    if (user.inventory.length === 0) {
+    if (user.inventory.length === 0)
       return message.channel.send("🎒 Your inventory is empty.");
-    }
 
     let counts = {};
 
@@ -139,9 +199,9 @@ client.on("messageCreate", async message => {
     return message.channel.send({
       embeds: [
         new EmbedBuilder()
-        .setTitle(`${message.author.username}'s Inventory`)
-        .setDescription(text)
-        .setColor("Orange")
+          .setTitle(`${message.author.username}'s Inventory`)
+          .setDescription(text)
+          .setColor("Orange")
       ]
     });
 
@@ -152,9 +212,8 @@ client.on("messageCreate", async message => {
 
     const item = args[1];
 
-    if (!user.inventory.includes(item)) {
+    if (!user.inventory.includes(item))
       return message.channel.send("❌ You don't own this item.");
-    }
 
     if (item === "lucky") {
 
@@ -166,9 +225,9 @@ client.on("messageCreate", async message => {
       return message.channel.send({
         embeds: [
           new EmbedBuilder()
-          .setTitle("🍀 Lucky Charm Used")
-          .setDescription("Your **next gamble has a higher win chance!**")
-          .setColor("Green")
+            .setTitle("🍀 Lucky Charm Used")
+            .setDescription("Your **next gamble has higher win chance!**")
+            .setColor("Green")
         ]
       });
 
@@ -181,13 +240,11 @@ client.on("messageCreate", async message => {
 
     const amount = parseInt(args[1]);
 
-    if (!amount || amount <= 0) {
+    if (!amount || amount <= 0)
       return message.channel.send("❌ Invalid amount.");
-    }
 
-    if (user.money < amount) {
+    if (user.money < amount)
       return message.channel.send("❌ Not enough coins.");
-    }
 
     let results = ["", "", ""];
 
@@ -215,8 +272,6 @@ client.on("messageCreate", async message => {
 
     }
 
-    /* WIN CHANCE */
-
     let winChance = 0.2;
 
     if (user.luckyBoost) {
@@ -227,17 +282,19 @@ client.on("messageCreate", async message => {
     let win = Math.random() < winChance;
 
     if (win) {
+
       const winnings = amount * 2;
       user.money += winnings;
 
       return spinMsg.edit({
         embeds: [
           new EmbedBuilder()
-          .setTitle("🎉 YOU WON!")
-          .setDescription(`${results.join(" ")}\n\n+${winnings} coins`)
-          .setColor("Green")
+            .setTitle("🎉 YOU WON!")
+            .setDescription(`${results.join(" ")}\n\n+${winnings} coins`)
+            .setColor("Green")
         ]
       });
+
     } else {
 
       user.money -= amount;
@@ -245,9 +302,9 @@ client.on("messageCreate", async message => {
       return spinMsg.edit({
         embeds: [
           new EmbedBuilder()
-          .setTitle("💀 You Lost")
-          .setDescription(`${results.join(" ")}\n\n-${amount} coins`)
-          .setColor("Red")
+            .setTitle("💀 You Lost")
+            .setDescription(`${results.join(" ")}\n\n-${amount} coins`)
+            .setColor("Red")
         ]
       });
 
