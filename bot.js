@@ -202,9 +202,9 @@ client.on("messageCreate", async message => {
                     .setTitle("❌ Use Failed")
                     .setDescription("Item doesn't exist")
                     .setColor("Red")]
-        });
+            });
         }
-    
+
         if (!user.inventory.includes(itemName)) {
             return message.channel.send({
                 embeds: [new EmbedBuilder()
@@ -214,21 +214,87 @@ client.on("messageCreate", async message => {
             });
         }
     
-        // Lucky Charm effect
+        /* LUCKY CHARM */
         if (itemName === "lucky") {
-    
+
             const index = user.inventory.indexOf("lucky");
             user.inventory.splice(index, 1);
-    
+            
             user.luckyBoost = true;
-    
+            
             return message.channel.send({
                 embeds: [new EmbedBuilder()
                     .setTitle("🍀 Lucky Charm Used")
                     .setDescription("Your **next gamble has a higher win chance!**")
                     .setColor("Green")]
             });
+
         }
+
+        /* COOKIE */
+        if (itemName === "cookie") {
+            
+            const index = user.inventory.indexOf("cookie");
+            user.inventory.splice(index, 1);
+            
+            const reward = Math.floor(Math.random() * 201) + 50; // 50–250 coins
+            user.money += reward;
+            
+            return message.channel.send({
+                embeds: [new EmbedBuilder()
+                    .setTitle("🍪 Cookie Eaten")
+                    .setDescription(`You found **${reward} coins** inside the cookie!`)
+                    .setColor("Gold")]
+            });
+            
+        }
+
+        /* LICK ITEM */
+        if (itemName === "lick") {
+
+           const mentionedUser = message.mentions.users.first();
+
+            if (!mentionedUser) {
+                return message.channel.send({
+                    embeds: [new EmbedBuilder()
+                        .setTitle("❌ Lick Failed")
+                        .setDescription("You must mention someone.\nExample: `goodmc use lick @user`")
+                        .setColor("Red")]
+                });
+            }
+
+            if (mentionedUser.id === message.author.id) {
+                return message.channel.send("❌ You can't lick yourself.");
+            }
+
+            const target = getUser(mentionedUser.id);
+        
+            if (target.money < 50) {
+                return message.channel.send({
+                    embeds: [new EmbedBuilder()
+                        .setTitle("👅 Lick Failed")
+                        .setDescription(`${mentionedUser.username} doesn't have **50 coins**!\nYour lick item was **not used**.`)
+                        .setColor("Red")]
+                });
+            }
+
+            /* REMOVE LICK ITEM */
+            const index = user.inventory.indexOf("lick");
+            user.inventory.splice(index, 1);
+
+            /* TRANSFER COINS */
+            target.money -= 50;
+            user.money += 50;
+
+            return message.channel.send({
+                embeds: [new EmbedBuilder()
+                    .setTitle("👅 LICK ATTACK!")
+                    .setDescription(`You licked **${mentionedUser.username}** and stole **50 coins**!`)
+                    .setColor("Purple")]
+            });
+        
+        }
+        
     }
 });
 
