@@ -313,5 +313,34 @@ client.on("messageCreate", async message => {
   }
 
 });
+if (cmd === "leaderboard") {
+
+  const sorted = Object.entries(data)
+    .sort((a, b) => b[1].money - a[1].money)
+    .slice(0, 10);
+
+  if (sorted.length === 0) {
+    return message.channel.send("🏆 No leaderboard data yet.");
+  }
+
+  let text = "";
+
+  sorted.forEach((userData, index) => {
+    const userId = userData[0];
+    const money = userData[1].money;
+
+    text += `**${index + 1}.** <@${userId}> — ${money} coins\n`;
+  });
+
+  return message.channel.send({
+    embeds: [
+      new EmbedBuilder()
+        .setTitle("🏆 Richest Players")
+        .setDescription(text)
+        .setColor("Gold")
+    ]
+  });
+
+}
 
 client.login(TOKEN);
