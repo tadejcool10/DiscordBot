@@ -27,10 +27,11 @@ const shop = {
 function getUser(id) {
     if (!data[id]) {
         data[id] = {
-            money: 1000,
+            money: 0,
             lastDaily: 0,
             lastWork: 0,
-            inventory: []
+            inventory: [],
+            luckyBoost: false
         };
     }
     return data[id];
@@ -172,9 +173,16 @@ client.on("messageCreate", async message => {
         }
 
         // Determine win/loss
-        let win = finalResult[0] === finalResult[1] && finalResult[1] === finalResult[2];
-        let winnings = win ? amount*2 : -amount;
-        user.money += winnings;
+        let winChance = 0.15;
+
+        if (user.luckyBoost) {
+            winChance = 0.35;
+            user.luckyBoost = false;
+        }
+
+        let win = Math.random() < winChance;
+            let winnings = win ? amount*2 : -amount;
+            user.money += winnings;
 
         // Final result embed
         const finalEmbed = new EmbedBuilder()
@@ -182,6 +190,45 @@ client.on("messageCreate", async message => {
             .setDescription(`${finalResult.join(" ")}\n\n${win ? `🎉 YOU WON! +${winnings} coins` : `💀 You lost! ${-winnings} coins`}`)
             .setColor(win ? "Green" : "Red");
         return spinMsg.edit({ embeds: [finalEmbed] });
+    }
+
+    if (args.startsWith("use ")) {
+
+        const itemName = args.slice(4).trim();
+
+        if (!shop[itemName]) {
+            return message.channel.send({
+                embeds: [new EmbedBuilder()
+                    .setTitle("❌ Use Failed")
+                    .setDescription("Item doesn't exist")
+                    .setColor("Red")]
+        });
+        }
+    
+        if (!user.inventory.includes(itemName)) {
+            return message.channel.send({
+                embeds: [new EmbedBuilder()
+                    .setTitle("❌ Use Failed")
+                    .setDescription("You don't own this item")
+                    .setColor("Red")]
+            });
+        }
+    
+        // Lucky Charm effect
+        if (itemName === "lucky") {
+    
+            const index = user.inventory.indexOf("lucky");
+            user.inventory.splice(index, 1);
+    
+            user.luckyBoost = true;
+    
+            return message.channel.send({
+                embeds: [new EmbedBuilder()
+                    .setTitle("🍀 Lucky Charm Used")
+                    .setDescription("Your **next gamble has a higher win chance!**")
+                    .setColor("Green")]
+            });
+        }
     }
 });
 
