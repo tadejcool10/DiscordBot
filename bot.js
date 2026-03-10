@@ -74,15 +74,16 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 /* SLOT EMOJIS */
 const spinEmoji = "<a:spin:1480248762789138656>";
-const slotEmojis = [
-    "<:cherry:1480249175303131246>",
-    "<:eggplant:1480249069614923937>",
-    "<:heart:1480248711308247163>",
-    "<:tounge:1480290929146335342>",
-    "<:clover:1480290939913244906>",
-    "<:gem:1480290950856311064>",
-    "<:cookie:1480290977959903274>",
-    "<:moneybag:1480291022817984582>"
+
+const slotEmojiIDs = [
+    "1480249175303131246", // cherry
+    "1480249069614923937", // eggplant
+    "1480248711308247163", // heart
+    "1480290929146335342", // tongue
+    "1480290939913244906", // clover
+    "1480290950856311064", // gem
+    "1480290977959903274", // cookie
+    "1480291022817984582"  // moneybag
 ];
 
 /* MESSAGE COMMANDS */
@@ -154,14 +155,17 @@ client.on("messageCreate", async message => {
         let finalResult = ["", "", ""];
         const spinEmbed = new EmbedBuilder()
             .setTitle("🎰 Casino")
-            .setDescription(`${spinEmoji} ${spinEmoji} ${spinEmoji}`)
+            .setDescription(`# ${spinEmoji}  ${spinEmoji}  ${spinEmoji}`)
             .setColor("Purple");
         const spinMsg = await message.channel.send({ embeds: [spinEmbed] });
 
         // Animate each reel
         for (let i = 0; i < 3; i++) {
             await new Promise(r => setTimeout(r, 1000)); // 1 sec per reel
-            finalResult[i] = slotEmojis[Math.floor(Math.random() * slotEmojis.length)];
+            const emojiID = slotEmojiIDs[Math.floor(Math.random() * slotEmojiIDs.length)];
+            const emoji = client.emojis.cache.get(emojiID);
+
+            finalResult[i] = emoji ? emoji.toString() : "❓";
 
             // Show updated embed
             const description = finalResult.map((e,j)=> e || spinEmoji).join(" ");
