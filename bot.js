@@ -84,7 +84,7 @@ const slotEmojis = [
     "<:moneybag:1480291022817984582>"
 ];
 
-finalResult[i] = slotEmojis[Math.floor(Math.random() * slotEmojis.length)];
+const spinEmoji = "<a:spin:1480248762789138656>";
 
 /* MESSAGE COMMANDS */
 client.on("messageCreate", async message => {
@@ -147,53 +147,72 @@ client.on("messageCreate", async message => {
 
     /* GAMBLE COMMAND */
     if (args.startsWith("gamble ")) {
-        const amount = parseInt(args.split(" ")[1]);
-        if (!amount || amount <= 0) return message.channel.send("❌ Invalid amount");
-        if (user.money < amount) return message.channel.send("❌ Not enough coins");
 
-        // Initialize spins
+        const amount = parseInt(args.split(" ")[1]);
+
+        if (!amount || amount <= 0)
+            return message.channel.send("❌ Invalid amount");
+
+        if (user.money < amount)
+            return message.channel.send("❌ Not enough coins");
+
         let finalResult = ["", "", ""];
+    
         const spinEmbed = new EmbedBuilder()
             .setTitle("🎰 Casino")
-            .setDescription(`# ${spinEmoji}  ${spinEmoji}  ${spinEmoji}`)
+            .setDescription(`${spinEmoji}   ${spinEmoji}   ${spinEmoji}`)
             .setColor("Purple");
+
         const spinMsg = await message.channel.send({ embeds: [spinEmbed] });
 
-        // Animate each reel
         for (let i = 0; i < 3; i++) {
-            await new Promise(r => setTimeout(r, 1000)); // 1 sec per reel
-            finalResult[i] = slotEmojis[Math.floor(Math.random() * slotEmojis.length)];
 
-            // Show updated embed
-            const description = finalResult.map((e,j)=> e || spinEmoji).join(" ");
+            await new Promise(r => setTimeout(r, 1200));
+
+            finalResult[i] = slotEmojis[Math.floor(Math.random() * slotEmojis.length)];
+    
+            const description =
+                `${finalResult[0] || spinEmoji}   ${finalResult[1] || spinEmoji}   ${finalResult[2] || spinEmoji}`;
+    
             const embed = new EmbedBuilder()
                 .setTitle("🎰 Casino")
-                .setDescription(`# description`)
+                .setDescription(description)
                 .setColor("Purple");
+    
             await spinMsg.edit({ embeds: [embed] });
+
         }
 
-        // Determine win/loss
-        let win = finalResult[0] === finalResult[1] && finalResult[1] === finalResult[2];
-        
-        // Lucky charm gives a second chance
+        let win =
+            finalResult[0] === finalResult[1] &&
+            finalResult[1] === finalResult[2];
+    
         if (!win && user.luckyBoost) {
+    
             user.luckyBoost = false;
-        
-            if (Math.random() < 0.35) {
+    
+            if (Math.random() < 0.35)
                 win = true;
-            }
+    
         }
 
-        let winnings = win ? amount * 2 : -amount;
-        user.money += winnings;
+        const winnings = win ? amount * 2 : -amount;
 
-        // Final result embed
+        user.money += winnings;
+    
         const finalEmbed = new EmbedBuilder()
             .setTitle("🎰 Casino Result")
-            .setDescription(`${finalResult.join(" ")}\n\n${win ? `🎉 YOU WON! +${winnings} coins` : `💀 You lost! ${-winnings} coins`}`)
+            .setDescription(
+                `${finalResult.join("   ")}\n\n${
+                    win
+                        ? `🎉 YOU WON **${winnings} coins**`
+                        : `💀 You lost **${amount} coins**`
+                }`
+            )
             .setColor(win ? "Green" : "Red");
-        return spinMsg.edit({ embeds: [finalEmbed] });
+
+        spinMsg.edit({ embeds: [finalEmbed] });
+
     }
 
     if (args.startsWith("use ")) {
