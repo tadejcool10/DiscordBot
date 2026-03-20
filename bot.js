@@ -70,15 +70,8 @@ const rest = new REST({version:"10"}).setToken(TOKEN);
 (async () => {
     console.log("🔄 Resetting commands...");
 
-    await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-        { body: [] }
-    );
-
-    await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-        { body: commands }
-    );
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: [] });
+    await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
 
     console.log("✅ Commands loaded");
 })();
@@ -91,39 +84,34 @@ client.on("messageCreate", async message=>{
     const args = message.content.slice(7).trim().toLowerCase();
     const user = getUser(message.author.id);
 
-    if(args === "balance"){
-        return message.reply(`💰 You have ${user.money} coins`);
-    }
+    if(args === "balance") return message.reply(`💰 You have ${user.money} coins`);
 
     if(args === "daily"){
         const now = Date.now();
-
-        if(now - user.lastDaily < 86400000){
-            return message.reply("⏳ Already claimed!");
-        }
-
+        if(now - user.lastDaily < 86400000) return message.reply("⏳ Already claimed!");
         user.money += 500;
         user.lastDaily = now;
-
         return message.reply("💰 +500 coins");
     }
 
     if(args === "work"){
         const now = Date.now();
-
-        if(now - user.lastWork < 3600000){
-            return message.reply("⏳ Wait before working again");
-        }
-
+        if(now - user.lastWork < 3600000) return message.reply("⏳ Wait before working again");
         user.money += 50;
         user.lastWork = now;
-
         return message.reply("💰 +50 coins");
+    }
+
+    if(args === "leaderboard"){
+        const sorted = Object.entries(data).sort((a,b)=>b[1].money-a[1].money).slice(0,10);
+        let text="";
+        sorted.forEach((u,i)=> text += `${i+1}. <@${u[0]}> — ${u[1].money} coins\n`);
+        return message.reply({ embeds:[new EmbedBuilder().setTitle("🏆 Leaderboard").setDescription(text||"No data").setColor("Blue")] });
     }
 
     if(args.startsWith("gamble ")){
         const amount = parseInt(args.split(" ")[1]);
-
+        if(!amount || amount <= 0) return message.reply("❌ Invalid amount");
         if(user.money < amount) return message.reply("❌ Not enough coins");
 
         let finalResult = ["","",""];
@@ -137,7 +125,6 @@ client.on("messageCreate", async message=>{
 
         for(let i=0;i<3;i++){
             await new Promise(r=>setTimeout(r,1200));
-
             finalResult[i] = slotEmojis[Math.floor(Math.random()*slotEmojis.length)];
 
             const display =
@@ -145,13 +132,10 @@ client.on("messageCreate", async message=>{
 ┃ ${finalResult[0]||spinEmoji} ${finalResult[1]||spinEmoji} ${finalResult[2]||spinEmoji} ┃
 ╚══════════════════╝`;
 
-            await spinMsg.edit({
-                embeds:[new EmbedBuilder().setDescription(display).setColor("Purple")]
-            });
+            await spinMsg.edit({ embeds:[new EmbedBuilder().setDescription(display).setColor("Purple")] });
         }
 
         let win = finalResult[0]===finalResult[1] && finalResult[1]===finalResult[2];
-
         const winnings = win ? amount*2 : -amount;
         user.money += winnings;
 
@@ -175,27 +159,17 @@ client.on("interactionCreate", async interaction=>{
 
     if(interaction.commandName==="daily"){
         const now = Date.now();
-
-        if(now - user.lastDaily < 86400000){
-            return interaction.reply("⏳ Already claimed!");
-        }
-
+        if(now - user.lastDaily < 86400000) return interaction.reply("⏳ Already claimed!");
         user.money += 500;
         user.lastDaily = now;
-
         return interaction.reply("💰 +500 coins");
     }
 
     if(interaction.commandName==="work"){
         const now = Date.now();
-
-        if(now - user.lastWork < 3600000){
-            return interaction.reply("⏳ Wait before working again");
-        }
-
+        if(now - user.lastWork < 3600000) return interaction.reply("⏳ Wait before working again");
         user.money += 50;
         user.lastWork = now;
-
         return interaction.reply("💰 +50 coins");
     }
 
@@ -203,12 +177,37 @@ client.on("interactionCreate", async interaction=>{
         return interaction.reply(`💰 ${user.money} coins`);
     }
 
+    if(interaction.commandName==="leaderboard"){
+        const sorted = Object.entries(data).sort((a,b)=>b[1].money-a[1].money).slice(0,10);
+        let text="";
+        sorted.forEach((u,i)=> text += `${i+1}. <@${u[0]}> — ${u[1].money} coins\n`);
+        return interaction.reply({ embeds:[new EmbedBuilder().setTitle("🏆 Leaderboard").setDescription(text||"No data").setColor("Blue")] });
+    }
+
+    if(interaction.commandName==="shop"){
+        return interaction.reply({
+            embeds:[new EmbedBuilder()
+                .setTitle("🛒 Shop")
+                .addFields(Object.keys(shop).map(i=>({
+                    name:`${shop[i].emoji} ${shop[i].name}`,
+                    value:`${shop[i].price} coins`,
+                    inline:true
+                })))
+                .setColor("Purple")]
+        });
+    }
+
+    if(interaction.commandName==="inventory"){
+        if(!user.inventory.length) return interaction.reply("🎒 Empty");
+        return interaction.reply(user.inventory.join(", "));
+    }
+
     if(interaction.commandName==="gamble"){
         const amount = interaction.options.getInteger("amount");
-
+        if(!amount || amount <= 0) return interaction.reply("❌ Invalid amount");
         if(user.money < amount) return interaction.reply("❌ Not enough coins");
 
-        let finalResult = ["","",""];
+        let finalResult=["","",""];
 
         await interaction.reply({
             embeds:[new EmbedBuilder().setDescription(
@@ -221,21 +220,17 @@ client.on("interactionCreate", async interaction=>{
 
         for(let i=0;i<3;i++){
             await new Promise(r=>setTimeout(r,1200));
-
-            finalResult[i] = slotEmojis[Math.floor(Math.random()*slotEmojis.length)];
+            finalResult[i]=slotEmojis[Math.floor(Math.random()*slotEmojis.length)];
 
             const display =
 `╔ 🎰 GOODMC CASINO 🎰 ╗
 ┃ ${finalResult[0]||spinEmoji} ${finalResult[1]||spinEmoji} ${finalResult[2]||spinEmoji} ┃
 ╚══════════════════╝`;
 
-            await msg.edit({
-                embeds:[new EmbedBuilder().setDescription(display).setColor("Purple")]
-            });
+            await msg.edit({ embeds:[new EmbedBuilder().setDescription(display).setColor("Purple")] });
         }
 
         let win = finalResult[0]===finalResult[1] && finalResult[1]===finalResult[2];
-
         const winnings = win ? amount*2 : -amount;
         user.money += winnings;
 
