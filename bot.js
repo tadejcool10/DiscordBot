@@ -61,7 +61,9 @@ const commands = [
         .setName("gamble")
         .setDescription("Gamble coins")
         .addIntegerOption(o =>
-            o.setName("amount").setRequired(true)
+            o.setName("amount")
+            .setDescription("Amount of coins to gamble")
+            .setRequired(true)
         )
 ].map(c => c.toJSON());
 
