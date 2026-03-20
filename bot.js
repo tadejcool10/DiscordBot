@@ -51,23 +51,50 @@ const slotEmojis = [
 
 /* SLASH COMMANDS */
 const commands = [
-new SlashCommandBuilder().setName("balance").setDescription("Check balance"),
-new SlashCommandBuilder().setName("shop").setDescription("View shop"),
-new SlashCommandBuilder().setName("inventory").setDescription("View inventory"),
-new SlashCommandBuilder()
-.setName("gamble")
-.setDescription("Gamble coins")
-.addIntegerOption(o=>o.setName("amount").setDescription("coins").setRequired(true))
-].map(c=>c.toJSON());
+    new SlashCommandBuilder().setName("daily").setDescription("Claim daily reward"),
+    new SlashCommandBuilder().setName("work").setDescription("Work to get money"),
+    new SlashCommandBuilder().setName("balance").setDescription("Check your balance"),
+    new SlashCommandBuilder().setName("leaderboard").setDescription("Richest players"),
+    new SlashCommandBuilder().setName("shop").setDescription("View the shop"),
+    new SlashCommandBuilder().setName("inventory").setDescription("View your inventory"),
+    new SlashCommandBuilder()
+        .setName("buy")
+        .setDescription("Buy an item")
+        .addStringOption(o =>
+            o.setName("item")
+             .setDescription("Item name")
+             .setRequired(true)
+        ),
+    new SlashCommandBuilder()
+        .setName("gamble")
+        .setDescription("Gamble your coins")
+        .addIntegerOption(o =>
+            o.setName("amount")
+             .setDescription("Coins to gamble")
+             .setRequired(true)
+        )
+].map(c => c.toJSON());
 
 const rest = new REST({version:"10"}).setToken(TOKEN);
 
-(async()=>{
-await rest.put(
-Routes.applicationGuildCommands(CLIENT_ID,GUILD_ID),
-{body:commands}
-);
-console.log("Commands loaded");
+(async () => {
+    console.log("🔄 Refreshing commands...");
+
+    // DELETE ALL OLD COMMANDS
+    await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+        { body: [] }
+    );
+
+    console.log("🗑️ Old commands deleted");
+
+    // ADD NEW COMMANDS
+    await rest.put(
+        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+        { body: commands }
+    );
+
+    console.log("✅ New commands loaded");
 })();
 
 /* MESSAGE COMMANDS */
@@ -212,6 +239,58 @@ ${win ? `🎉 YOU WON **${winnings} coins**` : `💀 You lost **${amount} coins*
 .setColor(win?"Green":"Red")
 ]});
 
+},
+
+if(args.startsWith("daily ")){
+    const now = Date.now();
+
+    if (now - user.lastDaily < 86400000) {
+        return interaction.reply("⏳ You already claimed your daily!");
+    }
+
+    const reward = 500;
+    user.money += reward;
+    user.lastDaily = now;
+
+    return interaction.reply(`💰 You received **${reward} coins**!`);
+}
+
+if(args.startsWith("work ")){
+    const now = Date.now();
+
+    if (now - user.lastWork < 3600000) {
+        const rem = 3600000 - (now - user.lastWork);
+        const m = Math.floor(rem / 60000);
+        const s = Math.floor((rem % 60000) / 1000);
+
+        return interaction.reply(`⏳ Wait ${m}m ${s}s`);
+    }
+
+    const amount = 50;
+    user.money += amount;
+    user.lastWork = now;
+
+    return interaction.reply(`🎉 You earned **${amount} coins**`);
+}
+
+if(args.startsWith("leaderboard ")){
+    const sorted = Object.entries(data)
+        .sort((a, b) => b[1].money - a[1].money)
+        .slice(0, 10);
+
+    let text = "";
+    sorted.forEach((u, i) => {
+        text += `${i + 1}. <@${u[0]}> — ${u[1].money} coins\n`;
+    });
+
+    return interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setTitle("🏆 Leaderboard")
+                .setDescription(text || "No data yet")
+                .setColor("Blue")
+        ]
+    });
 }
 
 });
