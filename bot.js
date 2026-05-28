@@ -14,17 +14,6 @@ const TOKEN = process.env.TOKEN;
 const CLIENT_ID = "1480186439890239498";
 const GUILD_ID = "1450556913300279393";
 
-/* ================= FIREBASE ================= */
-
-const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
-
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-});
-
-const db = admin.firestore();
-
 /* ================= CLIENT ================= */
 
 const client = new Client({
