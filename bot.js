@@ -1,345 +1,359 @@
-const { 
-    Client, 
-    GatewayIntentBits, 
-    REST, 
-    Routes, 
-    SlashCommandBuilder, 
-    EmbedBuilder,
-    AuditLogEvent
-} = require('discord.js');
-
-/* ================= CONFIG ================= */
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  EmbedBuilder
+} = require("discord.js");
+const fs = require("fs");
+const path = require("path");
 
 const TOKEN = process.env.TOKEN;
-const CLIENT_ID = "1480186439890239498";
-const GUILD_ID = "1450556913300279393";
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
 
-/* ================= CLIENT ================= */
-
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
-});
-
-/* ================= DATA ================= */
-
-let data = {};
-
-function getUser(id){
-    if(!data[id]){
-        data[id] = {
-            money:0,
-            lastDaily:0,
-            lastWork:0
-        };
-    }
-    return data[id];
+if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
+  console.error("Missing TOKEN, CLIENT_ID, or GUILD_ID environment variable.");
+  process.exit(1);
 }
 
-/* ================= EMOJIS ================= */
+const DATA_FILE = path.join(__dirname, "staff-data.json");
 
-const spinEmoji = "<a:spin:1480248762789138656>";
+const defaultData = {
+  quota: 100,
+  staff: {}
+};
 
-const slotEmojis = [
-"<:cherry:1480249175303131246>",
-"<:eggplant:1480249069614923937>",
-"<:heart:1480248711308247163>",
-"<:tounge:1480300461918781452>",
-"<:clover:1480300473855770624>",
-"<:gem:1480300489412448478>",
-"<:cookie:1480300499894009927>",
-"<:moneybag:1480300510010408980>"
-];
+function loadData() {
+  try {
+    if (!fs.existsSync(DATA_FILE)) {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(defaultData, null, 2));
+      return structuredClone(defaultData);
+    }
 
-/* ================= SLASH COMMANDS ================= */
+    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    return {
+      quota: Number.isInteger(parsed.quota) && parsed.quota >= 0 ? parsed.quota : 100,
+      staff: parsed.staff && typeof parsed.staff === "object" ? parsed.staff : {}
+    };
+  } catch (error) {
+    console.error("Failed to load staff-data.json:", error);
+    return structuredClone(defaultData);
+  }
+}
+
+let data = loadData();
+
+function saveData() {
+  const tempFile = DATA_FILE + ".tmp";
+  fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
+  fs.renameSync(tempFile, DATA_FILE);
+}
+
+function isStaff(userId) {
+  return Boolean(data.staff[userId]);
+}
+
+function ensureStaff(user) {
+  if (!data.staff[user.id]) {
+    data.staff[user.id] = {
+      username: user.username,
+      messages: 0,
+      addedAt: Date.now()
+    };
+  } else {
+    data.staff[user.id].username = user.username;
+  }
+
+  return data.staff[user.id];
+}
+
+function progressText(messages) {
+  if (data.quota === 0) return "∞ No quota set";
+  const percent = Math.min(100, Math.round((messages / data.quota) * 100));
+  const remaining = Math.max(0, data.quota - messages);
+
+  if (messages >= data.quota) {
+    return `✅ ${messages.toLocaleString()} / ${data.quota.toLocaleString()} (${percent}%) — quota reached`;
+  }
+
+  return `⏳ ${messages.toLocaleString()} / ${data.quota.toLocaleString()} (${percent}%) — ${remaining.toLocaleString()} remaining`;
+}
 
 const commands = [
-    new SlashCommandBuilder().setName("daily").setDescription("Claim daily reward"),
-    new SlashCommandBuilder().setName("work").setDescription("Work for coins"),
-    new SlashCommandBuilder().setName("balance").setDescription("Check balance"),
-    new SlashCommandBuilder().setName("leaderboard").setDescription("Top players"),
-    new SlashCommandBuilder()
-        .setName("gamble")
-        .setDescription("Gamble coins")
-        .addIntegerOption(o =>
-            o.setName("amount")
-             .setDescription("Coins to gamble")
-             .setRequired(true)
+  new SlashCommandBuilder()
+    .setName("staff")
+    .setDescription("Manage the staff list")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild.toString())
+    .addSubcommand(sub =>
+      sub
+        .setName("add")
+        .setDescription("Add a user to the staff list")
+        .addUserOption(option =>
+          option.setName("user").setDescription("Staff member to add").setRequired(true)
         )
-].map(c => c.toJSON());
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName("remove")
+        .setDescription("Remove a user from the staff list")
+        .addUserOption(option =>
+          option.setName("user").setDescription("Staff member to remove").setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub.setName("list").setDescription("Show all staff members")
+    ),
 
-const rest = new REST({version:"10"}).setToken(TOKEN);
+  new SlashCommandBuilder()
+    .setName("quota")
+    .setDescription("View staff message quotas")
+    .addSubcommand(sub =>
+      sub
+        .setName("set")
+        .setDescription("Set the required number of messages")
+        .addIntegerOption(option =>
+          option
+            .setName("messages")
+            .setDescription("Required messages")
+            .setMinValue(0)
+            .setRequired(true)
+        )
+    )
+    .addUserOption(option =>
+      option
+        .setName("user")
+        .setDescription("Optional staff member to check")
+        .setRequired(false)
+    ),
 
-(async () => {
-    console.log("🔄 Resetting commands...");
+  new SlashCommandBuilder()
+    .setName("quota-reset")
+    .setDescription("Reset a staff member's message count")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild.toString())
+    .addUserOption(option =>
+      option.setName("user").setDescription("Staff member to reset").setRequired(true)
+    )
+].map(command => command.toJSON());
 
-    await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-        { body: [] }
-    );
-
-    await rest.put(
-        Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-        { body: commands }
-    );
-
-    console.log("✅ Commands loaded");
-})();
-
-/* ================= MESSAGE COMMANDS ================= */
-
-client.on("messageCreate", async message=>{
-    if(message.author.bot) return;
-    if(!message.content.startsWith("goodmc ")) return;
-
-    const args = message.content.slice(7).trim().toLowerCase();
-    const user = getUser(message.author.id);
-
-    if(args==="balance"){
-        return message.reply(`💰 ${user.money} coins`);
-    }
-
-    if(args==="daily"){
-        const now = Date.now();
-        if(now - user.lastDaily < 86400000)
-            return message.reply("⏳ Already claimed!");
-
-        user.money += 500;
-        user.lastDaily = now;
-        return message.reply("💰 +500 coins");
-    }
-
-    if(args==="work"){
-        const now = Date.now();
-        if(now - user.lastWork < 3600000)
-            return message.reply("⏳ Wait before working again");
-
-        user.money += 50;
-        user.lastWork = now;
-        return message.reply("💰 +50 coins");
-    }
-
-    if(args==="leaderboard"){
-        const sorted = Object.entries(data)
-            .sort((a,b)=>b[1].money-a[1].money)
-            .slice(0,10);
-
-        let text="";
-        sorted.forEach((u,i)=>{
-            text += `${i+1}. <@${u[0]}> — ${u[1].money} coins\n`;
-        });
-
-        return message.reply({
-            embeds:[new EmbedBuilder()
-                .setTitle("🏆 Leaderboard")
-                .setDescription(text || "No data")
-                .setColor("Blue")]
-        });
-    }
-
-    if(args.startsWith("gamble ")){
-        const amount = parseInt(args.split(" ")[1]);
-        if(!amount || amount<=0) return message.reply("❌ Invalid amount");
-        if(user.money < amount) return message.reply("❌ Not enough coins");
-
-        let finalResult=["","",""];
-
-        const spinMsg = await message.channel.send({
-            embeds:[new EmbedBuilder().setDescription(
-`╔ 🎰 GOODMC CASINO 🎰 ╗
-┃ ${spinEmoji} ${spinEmoji} ${spinEmoji} ┃
-╚══════════════════╝`).setColor("Purple")]
-        });
-
-        for(let i=0;i<3;i++){
-            await new Promise(r=>setTimeout(r,1200));
-
-            finalResult[i]=slotEmojis[Math.floor(Math.random()*slotEmojis.length)];
-
-            const display =
-`╔ 🎰 GOODMC CASINO 🎰 ╗
-┃ ${finalResult[0]||spinEmoji} ${finalResult[1]||spinEmoji} ${finalResult[2]||spinEmoji} ┃
-╚══════════════════╝`;
-
-            await spinMsg.edit({
-                embeds:[new EmbedBuilder().setDescription(display).setColor("Purple")]
-            });
-        }
-
-        const win = finalResult[0]===finalResult[1] && finalResult[1]===finalResult[2];
-        const winnings = win ? amount*2 : -amount;
-
-        user.money += winnings;
-
-        await spinMsg.edit({
-            embeds:[new EmbedBuilder().setDescription(
-`╔ 🎰 GOODMC CASINO 🎰 ╗
-┃ ${finalResult.join(" ")} ┃
-╚══════════════════╝
-
-${win ? `🎉 WON +${winnings}` : `💀 LOST ${amount}`}`
-            ).setColor(win?"Green":"Red")]
-        });
-    }
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-/* ================= SLASH COMMAND HANDLER ================= */
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-client.on("interactionCreate", async interaction=>{
-    if(!interaction.isChatInputCommand()) return;
+async function registerCommands() {
+  console.log("Registering slash commands...");
 
-    const user = getUser(interaction.user.id);
+  await rest.put(
+    Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+    { body: commands }
+  );
 
-    if(interaction.commandName==="daily"){
-        const now = Date.now();
-        if(now - user.lastDaily < 86400000)
-            return interaction.reply("⏳ Already claimed!");
+  console.log("Slash commands registered.");
+}
 
-        user.money += 500;
-        user.lastDaily = now;
-        return interaction.reply("💰 +500 coins");
-    }
+client.once("ready", () => {
+  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`Staff quota: ${data.quota} messages`);
+  console.log(`Staff members: ${Object.keys(data.staff).length}`);
+});
 
-    if(interaction.commandName==="work"){
-        const now = Date.now();
-        if(now - user.lastWork < 3600000)
-            return interaction.reply("⏳ Wait before working again");
+client.on("messageCreate", message => {
+  if (message.author.bot) return;
+  if (!message.guild) return;
+  if (!isStaff(message.author.id)) return;
 
-        user.money += 50;
-        user.lastWork = now;
-        return interaction.reply("💰 +50 coins");
-    }
+  const staff = ensureStaff(message.author);
+  staff.messages += 1;
+  saveData();
+});
 
-    if(interaction.commandName==="balance"){
-        return interaction.reply(`💰 ${user.money} coins`);
-    }
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
-    if(interaction.commandName==="leaderboard"){
-        const sorted = Object.entries(data)
-            .sort((a,b)=>b[1].money-a[1].money)
-            .slice(0,10);
-
-        let text="";
-        sorted.forEach((u,i)=>{
-            text += `${i+1}. <@${u[0]}> — ${u[1].money} coins\n`;
-        });
-
+  try {
+    if (interaction.commandName === "staff") {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
         return interaction.reply({
-            embeds:[new EmbedBuilder()
-                .setTitle("🏆 Leaderboard")
-                .setDescription(text || "No data")
-                .setColor("Blue")]
+          content: "❌ You need Manage Server permission to manage staff.",
+          ephemeral: true
         });
-    }
+      }
 
-    if(interaction.commandName==="gamble"){
-        const amount = interaction.options.getInteger("amount");
-        if(user.money < amount) return interaction.reply("❌ Not enough coins");
+      const subcommand = interaction.options.getSubcommand();
 
-        let finalResult=["","",""];
+      if (subcommand === "add") {
+        const user = interaction.options.getUser("user", true);
 
-        await interaction.reply({
-            embeds:[new EmbedBuilder().setDescription(
-`╔ 🎰 GOODMC CASINO 🎰 ╗
-┃ ${spinEmoji} ${spinEmoji} ${spinEmoji} ┃
-╚══════════════════╝`).setColor("Purple")]
-        });
-
-        const msg = await interaction.fetchReply();
-
-        for(let i=0;i<3;i++){
-            await new Promise(r=>setTimeout(r,1200));
-
-            finalResult[i]=slotEmojis[Math.floor(Math.random()*slotEmojis.length)];
-
-            const display =
-`╔ 🎰 GOODMC CASINO 🎰 ╗
-┃ ${finalResult[0]||spinEmoji} ${finalResult[1]||spinEmoji} ${finalResult[2]||spinEmoji} ┃
-╚══════════════════╝`;
-
-            await msg.edit({
-                embeds:[new EmbedBuilder().setDescription(display).setColor("Purple")]
-            });
+        if (isStaff(user.id)) {
+          return interaction.reply({
+            content: `⚠️ <@${user.id}> is already on the staff list.`,
+            ephemeral: true
+          });
         }
 
-        const win = finalResult[0]===finalResult[1] && finalResult[1]===finalResult[2];
-        const winnings = win ? amount*2 : -amount;
+        data.staff[user.id] = {
+          username: user.username,
+          messages: 0,
+          addedAt: Date.now()
+        };
 
-        user.money += winnings;
+        saveData();
 
-        await msg.edit({
-            embeds:[new EmbedBuilder().setDescription(
-`╔ 🎰 GOODMC CASINO 🎰 ╗
-┃ ${finalResult.join(" ")} ┃
-╚══════════════════╝
+        return interaction.reply(
+          `✅ Added <@${user.id}> to staff. Their message count starts at **0**.`
+        );
+      }
 
-${win ? `🎉 WON +${winnings}` : `💀 LOST ${amount}`}`
-            ).setColor(win?"Green":"Red")]
-        });
-    }
-});
+      if (subcommand === "remove") {
+        const user = interaction.options.getUser("user", true);
 
-/* ================= TICKET SYSTEM ================= */
-
-client.on("channelCreate", async (channel) => {
-
-    if (!channel.isTextBased()) return;
-    if (!channel.name.startsWith("ticket-")) return;
-
-    try {
-        const logs = await channel.guild.fetchAuditLogs({
-            type: AuditLogEvent.ChannelCreate,
-            limit: 1
-        });
-
-        const log = logs.entries.first();
-        if (!log) return;
-
-        const creator = log.executor;
-        if (!creator) return;
-
-        const snapshot = await db.collection("users").get();
-
-        let foundUser = null;
-
-        snapshot.forEach(doc => {
-            const data = doc.data();
-
-            if (
-                data.discordId === creator.id ||
-                data.username?.toLowerCase() === creator.username.toLowerCase()
-            ) {
-                foundUser = data;
-            }
-        });
-
-        if (!foundUser) {
-            return channel.send("❌ No user found in database");
+        if (!isStaff(user.id)) {
+          return interaction.reply({
+            content: `⚠️ <@${user.id}> is not on the staff list.`,
+            ephemeral: true
+          });
         }
+
+        delete data.staff[user.id];
+        saveData();
+
+        return interaction.reply(`✅ Removed <@${user.id}> from the staff list.`);
+      }
+
+      if (subcommand === "list") {
+        const entries = Object.entries(data.staff);
+
+        if (entries.length === 0) {
+          return interaction.reply("📋 The staff list is empty.");
+        }
+
+        const lines = entries
+          .sort((a, b) => b[1].messages - a[1].messages)
+          .map(([id, staff], index) =>
+            `${index + 1}. <@${id}> — ${progressText(staff.messages)}`
+          );
 
         const embed = new EmbedBuilder()
-            .setTitle("🎫 Ticket User Info")
-            .addFields(
-                { name: "👤 Username", value: foundUser.username || creator.username, inline: true },
-                { name: "🏆 Rank", value: foundUser.rank || "None", inline: true },
-                { name: "🆔 Discord ID", value: creator.id }
-            )
-            .setColor("Purple");
+          .setTitle("👥 Staff List")
+          .setDescription(lines.join("\n"))
+          .setFooter({ text: `Required quota: ${data.quota.toLocaleString()} messages` });
 
-        channel.send({ embeds: [embed] });
-
-    } catch (err) {
-        console.error(err);
-        channel.send("❌ Error fetching user info");
+        return interaction.reply({ embeds: [embed] });
+      }
     }
 
+    if (interaction.commandName === "quota") {
+      const subcommand = interaction.options.getSubcommand(false);
+
+      if (subcommand === "set") {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+          return interaction.reply({
+            content: "❌ You need Manage Server permission to change the quota.",
+            ephemeral: true
+          });
+        }
+
+        const amount = interaction.options.getInteger("messages", true);
+        data.quota = amount;
+        saveData();
+
+        return interaction.reply(
+          `✅ Staff quota set to **${amount.toLocaleString()} messages**.`
+        );
+      }
+
+      const requestedUser = interaction.options.getUser("user");
+      const targetId = requestedUser?.id;
+
+      if (targetId) {
+        if (!isStaff(targetId)) {
+          return interaction.reply(`❌ <@${targetId}> is not on the staff list.`);
+        }
+
+        const staff = ensureStaff(requestedUser);
+        const embed = new EmbedBuilder()
+          .setTitle(`📊 Quota — ${requestedUser.username}`)
+          .setDescription(progressText(staff.messages))
+          .addFields(
+            { name: "Messages", value: staff.messages.toLocaleString(), inline: true },
+            { name: "Required", value: data.quota.toLocaleString(), inline: true }
+          );
+
+        return interaction.reply({ embeds: [embed] });
+      }
+
+      const entries = Object.entries(data.staff);
+
+      if (entries.length === 0) {
+        return interaction.reply("📊 No staff members have been added yet.");
+      }
+
+      const lines = entries
+        .sort((a, b) => b[1].messages - a[1].messages)
+        .map(([id, staff]) => `<@${id}> — ${progressText(staff.messages)}`);
+
+      const embed = new EmbedBuilder()
+        .setTitle("📊 Staff Quota")
+        .setDescription(lines.join("\n"))
+        .setFooter({ text: `Required: ${data.quota.toLocaleString()} messages` });
+
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === "quota-reset") {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        return interaction.reply({
+          content: "❌ You need Manage Server permission to reset quotas.",
+          ephemeral: true
+        });
+      }
+
+      const user = interaction.options.getUser("user", true);
+
+      if (!isStaff(user.id)) {
+        return interaction.reply({
+          content: `❌ <@${user.id}> is not on the staff list.`,
+          ephemeral: true
+        });
+      }
+
+      data.staff[user.id].messages = 0;
+      data.staff[user.id].username = user.username;
+      saveData();
+
+      return interaction.reply(`✅ Reset <@${user.id}>'s message count to **0**.`);
+    }
+  } catch (error) {
+    console.error("Interaction error:", error);
+
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({
+        content: "❌ Something went wrong while processing that command.",
+        ephemeral: true
+      }).catch(() => {});
+    } else {
+      await interaction.reply({
+        content: "❌ Something went wrong while processing that command.",
+        ephemeral: true
+      }).catch(() => {});
+    }
+  }
 });
 
-/* ================= READY ================= */
-
-client.once("ready",()=>console.log("🤖 Bot online"));
-
-client.login(TOKEN);
+(async () => {
+  try {
+    await registerCommands();
+    await client.login(TOKEN);
+  } catch (error) {
+    console.error("Failed to start bot:", error);
+    process.exit(1);
+  }
+})();
