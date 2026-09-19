@@ -1,2 +1,4 @@
 node_modules
 money.json
+staff-data.json
+.env
