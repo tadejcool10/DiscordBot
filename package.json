@@ -1,6 +1,7 @@
 {
-  "name": "discord-bot",
+  "name": "goodmc-staff-bot",
   "version": "1.0.0",
+  "description": "GoodMC Discord staff quota and message tracking bot",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
